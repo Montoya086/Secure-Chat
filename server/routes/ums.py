@@ -4,7 +4,7 @@ import jwt
 from datetime import datetime, timedelta
 from config.database import get_db
 from utils.crypto import generate_key_pair, get_public_key_pem, get_private_key_pem
-
+from utils.google import get_google_tokens
 auth_bp = Blueprint('auth', __name__)
 
 def generate_tokens(user_id):
@@ -119,3 +119,19 @@ def refresh():
         return jsonify({'error': 'Refresh token has expired'}), 401
     except jwt.InvalidTokenError:
         return jsonify({'error': 'Invalid refresh token'}), 401 
+    
+
+
+
+@auth_bp.route('/oauth/login', methods=['POST'])
+def oauth_login():
+    data = request.get_json()
+    print(data)
+    provider = data['provider']
+    code = data['code']
+    if provider == 'google':
+        tokens = get_google_tokens(code)
+        print(tokens)
+        #return jsonify({'access_token': credentials.token, 'refresh_token': credentials.refresh_token}), 200
+    else:
+        return jsonify({'error': 'Invalid provider'}), 400
