@@ -15,6 +15,11 @@ export interface LoginRequest {
 	password: string;
 }
 
+export interface OAuthLoginRequest {
+	provider: 'google';
+	code: string;
+}
+
 export interface RegisterRequest {
 	email: string;
 	password: string;

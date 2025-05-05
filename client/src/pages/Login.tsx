@@ -5,6 +5,7 @@ import { setAppState } from '../store/slices/appState-slice';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import useAuth from '../hooks/useAuth';
+import { CredentialResponse, useGoogleLogin } from '@react-oauth/google';
 
 //Definición de colores de la paleta
 const colors = {
@@ -15,6 +16,11 @@ const colors = {
   accent: '#48284a'      //Violet (JTC)
 };
 
+// if is production, use the production redirect uri
+const redirectUri = import.meta.env.VITE_DEVELOP_REDIRECT_URL;
+
+console.log("redirectUri", redirectUri);
+
 const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -22,6 +28,17 @@ const Login = () => {
   const { handleLogin, isLoginLoading } = useAuth();
   const from = location.state?.from?.pathname || '/';
   const [showPassword, setShowPassword] = useState(false);
+
+  const googleLogin = useGoogleLogin({
+    redirect_uri: redirectUri,
+    flow: 'auth-code',
+    onSuccess: (tokenResponse) => {
+      console.log("Google login response", tokenResponse);
+    },
+    onError: (error) => {
+      console.log("Google login error", error);
+    }
+  });
 
   const onLogin = (email: string, password: string) => {
     handleLogin(
@@ -199,7 +216,9 @@ const Login = () => {
           >
             {isLoginLoading ? 'Cargando...' : 'Iniciar Sesión'}
           </button>
-          
+          <button onClick={() => googleLogin()}>
+            Iniciar sesión con Google
+          </button>
           <div style={{ textAlign: 'center', marginTop: '10px' }}>
             <a 
               href="/signup"
