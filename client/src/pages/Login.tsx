@@ -5,7 +5,7 @@ import { setAppState } from '../store/slices/appState-slice';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import useAuth from '../hooks/useAuth';
-import { CredentialResponse, useGoogleLogin } from '@react-oauth/google';
+import { useGoogleLogin } from '@react-oauth/google';
 
 //Definición de colores de la paleta
 const colors = {
@@ -18,8 +18,6 @@ const colors = {
 
 // if is production, use the production redirect uri
 const redirectUri = import.meta.env.VITE_DEVELOP_REDIRECT_URL;
-
-console.log("redirectUri", redirectUri);
 
 const Login = () => {
   const dispatch = useDispatch();

@@ -22,8 +22,6 @@ def get_google_tokens(auth_code):
         "redirect_uri": REDIRECT_URI,
         "grant_type": "authorization_code"
     }
-
-    print(data)
     
     response = requests.post(TOKEN_URL, data=data)
     token_data = response.json()
@@ -31,19 +29,7 @@ def get_google_tokens(auth_code):
     if 'error' in token_data:
         raise Exception(f"Error getting tokens: {token_data['error']}")
     
-    # Calculate expiry times
-    access_token_expiry = datetime.now() + timedelta(seconds=token_data.get('expires_in', 3600))
-    # Refresh tokens typically don't expire unless revoked
-    refresh_token_expiry = None
-    
-    return {
-        'access_token': token_data.get('access_token'),
-        'refresh_token': token_data.get('refresh_token'),
-        'access_token_expiry': access_token_expiry,
-        'refresh_token_expiry': refresh_token_expiry,
-        'token_type': token_data.get('token_type'),
-        'scope': token_data.get('scope')
-    }
+    return token_data
 
 def get_user_info(access_token):
     headers = {"Authorization": f"Bearer {access_token}"}
