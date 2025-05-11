@@ -23,7 +23,7 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { handleLogin, isLoginLoading } = useAuth();
+  const { handleLogin, handleOauthLogin, isLoginLoading } = useAuth();
   const from = location.state?.from?.pathname || '/';
   const [showPassword, setShowPassword] = useState(false);
 
@@ -31,7 +31,10 @@ const Login = () => {
     redirect_uri: redirectUri,
     flow: 'auth-code',
     onSuccess: (tokenResponse) => {
-      console.log("Google login response", tokenResponse);
+      handleOauthLogin(tokenResponse.code, 'google', () => {
+        dispatch(setAppState('LOGGED_IN'));
+        navigate(from, { replace: true });
+      });
     },
     onError: (error) => {
       console.log("Google login error", error);

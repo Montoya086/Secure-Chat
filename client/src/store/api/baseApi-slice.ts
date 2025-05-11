@@ -84,4 +84,5 @@ export const apiSlice = createApi({
 export const {
   useLoginMutation,
   useRegisterMutation,
+  useOauthLoginMutation,
 } = apiSlice;

@@ -35,24 +35,24 @@ export const authEndpoints = (builder: Builder) => ({
       url: 'auth/oauth/login',
       method: 'POST',
       body: credentials,
-      async onQueryStarted(_arg: OAuthLoginRequest, { queryFulfilled }: QueryFulfilled) {
-        try {
-          const { data } = await queryFulfilled;
-          Cookies.set(TOKEN_COOKIE_NAME, data.access_token, {
-            secure: true,
-            sameSite: 'strict',
-            expires: new Date(Date.now() + Number(data.access_token_expiration_time)),
-          });
-          Cookies.set(REFRESH_TOKEN_COOKIE_NAME, data.refresh_token, {
-            secure: true,
-            sameSite: 'strict',
-            expires: new Date(Date.now() + Number(data.refresh_token_expiration_time)),
-          });
-        } catch {
-          console.error('Error logging in');
-        }
-      },
     }),
+    async onQueryStarted(_arg: OAuthLoginRequest, { queryFulfilled }: QueryFulfilled) {
+      try {
+        const { data } = await queryFulfilled;
+        Cookies.set(TOKEN_COOKIE_NAME, data.access_token, {
+          secure: true,
+          sameSite: 'strict',
+          expires: new Date(Date.now() + Number(data.access_token_expiration_time)),
+        });
+        Cookies.set(REFRESH_TOKEN_COOKIE_NAME, data.refresh_token, {
+          secure: true,
+          sameSite: 'strict',
+          expires: new Date(Date.now() + Number(data.refresh_token_expiration_time)),
+        });
+      } catch {
+        console.error('Error logging in');
+      }
+    },
   }),
   register: builder.mutation<AuthResponse, RegisterRequest>({
     query: (userData: RegisterRequest) => ({
