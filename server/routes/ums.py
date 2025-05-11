@@ -38,30 +38,47 @@ def generate_tokens(user_id, provider = 'local'):
 def register():
     data = request.get_json()
     db = get_db()
-    if db.users.find_one({'email': data['email']}):
-        return jsonify({'error': 'Email already exists'}), 400
     
     # Generate RSA key pair for the user
     private_key, public_key = generate_key_pair()
     private_key_pem = get_private_key_pem(private_key).decode('utf-8')
     public_key_pem = get_public_key_pem(public_key).decode('utf-8')
+
+    # check if the user is already registered
+    existing_user = db.users.find_one({'email': data['email']})
+    if existing_user:
+        # if the user exists but doesn't have a password, set it
+        if 'password' not in existing_user:
+            db.users.update_one({'email': data['email']}, {'$set': {'password': generate_password_hash(data['password'])}})
+            # add the provider to the user
+            db.users.update_one({'email': data['email']}, {'$push': {'providers': 'local'}})
+            userId = existing_user['_id']
+        else:
+            return jsonify({'error': 'Email already exists'}), 400
+    else:
+        # if the user is not registered, create a new user
+        user = {
+            'email': data['email'],
+            'givenName': data['givenName'],
+            'familyName': data['familyName'],
+            'providers': ['local'],
+            'password': generate_password_hash(data['password']),
+            'private_key': private_key_pem,
+            'public_key': public_key_pem,
+            'created_at': datetime.utcnow()
+        }
     
-    user = {
-        'email': data['email'],
-        'password': generate_password_hash(data['password']),
-        'private_key': private_key_pem,
-        'public_key': public_key_pem,
-        'created_at': datetime.utcnow()
-    }
+        result = db.users.insert_one(user)
+        userId = result.inserted_id
     
-    result = db.users.insert_one(user)
-    access_token, refresh_token = generate_tokens(result.inserted_id)
+    access_token, refresh_token = generate_tokens(userId)
     
-    user.pop('private_key', None)
     return jsonify({
         'message': 'User registered successfully',
         'access_token': access_token,
-        'refresh_token': refresh_token
+        'access_token_expiration_time': int(current_app.config['ACCESS_TOKEN_EXPIRATION_TIME']) * 60 * 1000,
+        'refresh_token': refresh_token,
+        'refresh_token_expiration_time': int(current_app.config['REFRESH_TOKEN_EXPIRATION_TIME']) * 24 * 60 * 60 * 1000
     }), 201
     
 @auth_bp.route('/login', methods=['POST'])
