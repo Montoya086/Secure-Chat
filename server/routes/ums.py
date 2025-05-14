@@ -153,10 +153,10 @@ def oauth_login():
         idToken = tokens['id_token']
         # decode idToken
         decoded_token = jwt.decode(idToken, options={"verify_signature": False})
-        email = decoded_token['email']
-        givenName = decoded_token['given_name']
-        familyName = decoded_token['family_name']
-        picture = decoded_token['picture']
+        email = decoded_token.get('email', '')
+        givenName = decoded_token.get('given_name', '')
+        familyName = decoded_token.get('family_name', '')
+        picture = decoded_token.get('picture', '')
         db = get_db()
         # check the email is already registered
         if not db.users.find_one({'email': email}):
