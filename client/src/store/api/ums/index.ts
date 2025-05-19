@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie';
 import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../../../utils/constants';
-import { AuthResponse, LoginRequest, MfaConfigureResponse, OAuthLoginRequest, RegisterRequest } from '../types';
+import { AuthResponse, LoginRequest, MfaConfigureResponse, OAuthLoginRequest, RegisterRequest, VerifyMfaRequest, VerifyMfaResponse } from '../types';
 import { QueryFulfilled, Builder } from '../types';
 import { validateMfaStatus } from '../../../utils/validateMfaStatus';
 import { setMfaEnabled } from '../../slices/appState-slice';
@@ -90,6 +90,16 @@ export const authEndpoints = (builder: Builder) => ({
       method: 'POST',
     }),
     transformResponse: (response: MfaConfigureResponse) => {
+      return response;
+    },
+  }),
+  verifyMfa: builder.mutation<VerifyMfaResponse, VerifyMfaRequest>({
+    query: (data: VerifyMfaRequest) => ({
+      url: 'auth/mfa/verify',
+      method: 'POST',
+      body: data,
+    }),
+    transformResponse: (response: VerifyMfaResponse) => {
       return response;
     },
   }),

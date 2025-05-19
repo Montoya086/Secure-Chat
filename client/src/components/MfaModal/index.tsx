@@ -2,6 +2,8 @@ import React, { Fragment, useEffect, useRef, useState } from 'react'
 import useAuth from '../../hooks/useAuth';
 import Modal from '@mui/material/Modal'
 import './styles.css'
+import { useDispatch } from 'react-redux';
+import { setMfaCompleted } from '../../store/slices/appState-slice';
 
 export interface MfaModalProps {
   isOpen: boolean;
@@ -12,10 +14,11 @@ const MfaModal: React.FC<MfaModalProps> = ({ isOpen }) => {
   const [allowBack, setAllowBack] = useState<boolean>(true);
   const [qrcode, setQrcode] = useState<string | null>(null);
   const otpRef = useRef<string>('');
-  const { handleConfigureMfa } = useAuth();
+  const { handleConfigureMfa, handleVerifyMfa } = useAuth();
+  const dispatch = useDispatch();
 
   useEffect(() => {
-    if (isOpen && !qrcode) {
+    if (isOpen) {
       handleConfigureMfa((qrcode) => {
         if (qrcode) {
           setQrcode(qrcode);
@@ -25,7 +28,7 @@ const MfaModal: React.FC<MfaModalProps> = ({ isOpen }) => {
         }
       });
     }
-  }, [isOpen, qrcode]);
+  }, [isOpen]);
 
   const handleBack = () => {
     if (allowBack) {
@@ -37,7 +40,11 @@ const MfaModal: React.FC<MfaModalProps> = ({ isOpen }) => {
     if (step === 0) {
       setStep(1);
     } else if (step === 1) {
-      return;
+      handleVerifyMfa(otpRef.current, (valid) => {
+        if (valid) {
+          dispatch(setMfaCompleted(true));
+        }
+      });
     }
   }
 

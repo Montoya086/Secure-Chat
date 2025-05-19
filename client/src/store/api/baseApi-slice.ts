@@ -89,4 +89,5 @@ export const {
   useRegisterMutation,
   useOauthLoginMutation,
   useConfigureMfaMutation,
+  useVerifyMfaMutation,
 } = apiSlice;

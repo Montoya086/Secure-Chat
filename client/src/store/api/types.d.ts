@@ -53,3 +53,11 @@ export type QueryFulfilled = {
 export interface MfaConfigureResponse {
   qrcode: string;
 }
+
+export interface VerifyMfaRequest {
+  otp: string;
+}
+
+export interface VerifyMfaResponse {
+  valid: boolean;
+}

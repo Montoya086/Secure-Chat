@@ -1,4 +1,4 @@
-import { useLoginMutation, useRegisterMutation, useOauthLoginMutation, useConfigureMfaMutation } from "../store/api/baseApi-slice";
+import { useLoginMutation, useRegisterMutation, useOauthLoginMutation, useConfigureMfaMutation, useVerifyMfaMutation } from "../store/api/baseApi-slice";
 import { useState } from "react";
 import { OAuthProvider } from "../store/api/types";
 import { useDispatch } from "react-redux";
@@ -11,6 +11,7 @@ const useAuth = () => {
     const [handleRegisterMutation, { isLoading: isRegisterLoading }] = useRegisterMutation();
     const [handleOauthLoginMutation, { isLoading: isOauthLoginLoading }] = useOauthLoginMutation();
     const [handleConfigureMfaMutation, { isLoading: isConfigureMfaLoading }] = useConfigureMfaMutation();
+    const [handleVerifyMfaMutation, { isLoading: isVerifyMfaLoading }] = useVerifyMfaMutation();
     const [error, setError] = useState<string | null>(null);
     const dispatch = useDispatch();
     const handleLogin = async (email: string, password: string, callback: () => void) => {
@@ -22,6 +23,17 @@ const useAuth = () => {
             }
         } catch (err: any) {
             setError(err.data?.message || 'Error al iniciar sesión');
+            console.error(err);
+        }
+    }
+
+    const handleVerifyMfa = async (otp: string, callback: (valid: boolean) => void) => {
+        setError(null);
+        try {
+            const response = await handleVerifyMfaMutation({ otp }).unwrap();
+            callback(response.valid);
+        } catch (err: any) {
+            setError(err.data?.message || 'Error al verificar MFA');
             console.error(err);
         }
     }
@@ -77,10 +89,12 @@ const useAuth = () => {
         handleOauthLogin,
         handleLogout,
         handleConfigureMfa,
+        handleVerifyMfa,
         isLoginLoading,
         isRegisterLoading,
         isOauthLoginLoading,
         isConfigureMfaLoading,
+        isVerifyMfaLoading,
         error
     };
 }

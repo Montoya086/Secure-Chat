@@ -252,4 +252,17 @@ def configure_mfa(current_user):
 @auth_bp.route('/mfa/verify', methods=['POST'])
 @token_required
 def verify_mfa(current_user):
-    pass
+    data = request.get_json()
+    otp = data['otp']
+    mfa_secret = current_user['mfa_secret']
+    if not mfa_secret:
+        return jsonify({'error': 'MFA secret not found'}), 400
+    totp = pyotp.TOTP(mfa_secret)
+    is_valid = totp.verify(otp)
+    if is_valid:
+        db = get_db()
+        db.users.update_one({'email': current_user['email']}, {'$set': {'mfa_enabled': True}})
+        return jsonify({'valid': True}), 200
+    else:
+        return jsonify({'error': 'Invalid OTP'}), 400
+    
