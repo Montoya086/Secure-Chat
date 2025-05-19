@@ -1,0 +1,39 @@
+.modal-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #ffffff;
+}
+
+.qrcode-title {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  color: #000000;
+  text-align: center;
+}
+
+.qrcode-container, .otp-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  padding: 2em;
+  border-radius: 1em;
+  border: 1px solid #000000;
+  gap: 1em;
+}
+
+.qrcode {
+  width: 20em;
+  height: 20em;
+}
+
+.go-back {
+  color: #0000ff;
+  text-decoration: underline;
+  cursor: pointer;
+}

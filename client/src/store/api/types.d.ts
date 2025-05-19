@@ -1,4 +1,6 @@
 import { EndpointBuilder, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { AnyAction } from '@reduxjs/toolkit';
+
 export interface AuthResponse {
 	access_token: string;
 	refresh_token: string;
@@ -45,5 +47,9 @@ export type Builder = EndpointBuilder<
 
 export type QueryFulfilled = {
   queryFulfilled: Promise<{ data: AuthResponse }>;
+  dispatch: (action: AnyAction) => void;
 };
 
+export interface MfaConfigureResponse {
+  qrcode: string;
+}

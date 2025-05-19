@@ -1,8 +1,9 @@
 import { createApi, fetchBaseQuery, FetchBaseQueryError, BaseQueryApi, FetchArgs } from '@reduxjs/toolkit/query/react';
 import Cookies from 'js-cookie';
 import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../../utils/constants';
-import { setAppState } from '../slices/appState-slice';
+import { setAppState, setMfaEnabled } from '../slices/appState-slice';
 import { authEndpoints } from './ums';
+import { validateMfaStatus } from '../../utils/validateMfaStatus';
 
 // Define a service using a base URL and expected endpoints
 const baseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -52,6 +53,8 @@ export const baseQueryWithReauth = async (
         sameSite: 'strict',
         expires: new Date(Date.now() + Number(data.access_token_expiration_time)),
       });
+      const mfaEnabled = validateMfaStatus(data.access_token);
+      api.dispatch(setMfaEnabled(mfaEnabled));
     } else {
       Cookies.remove(TOKEN_COOKIE_NAME);
       Cookies.remove(REFRESH_TOKEN_COOKIE_NAME);
@@ -85,4 +88,5 @@ export const {
   useLoginMutation,
   useRegisterMutation,
   useOauthLoginMutation,
+  useConfigureMfaMutation,
 } = apiSlice;

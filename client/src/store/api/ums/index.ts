@@ -1,7 +1,9 @@
 import Cookies from 'js-cookie';
 import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../../../utils/constants';
-import { AuthResponse, LoginRequest, OAuthLoginRequest, RegisterRequest } from '../types';
+import { AuthResponse, LoginRequest, MfaConfigureResponse, OAuthLoginRequest, RegisterRequest } from '../types';
 import { QueryFulfilled, Builder } from '../types';
+import { validateMfaStatus } from '../../../utils/validateMfaStatus';
+import { setMfaEnabled } from '../../slices/appState-slice';
 
 export const authEndpoints = (builder: Builder) => ({
   // Auth endpoints (unprotected)
@@ -11,7 +13,7 @@ export const authEndpoints = (builder: Builder) => ({
       method: 'POST',
       body: credentials,
     }),
-    async onQueryStarted(_arg: LoginRequest, { queryFulfilled }: QueryFulfilled) {
+    async onQueryStarted(_arg: LoginRequest, { queryFulfilled, dispatch }: QueryFulfilled) {
       try {
         const { data } = await queryFulfilled;
         // Store tokens in cookies
@@ -20,6 +22,8 @@ export const authEndpoints = (builder: Builder) => ({
           sameSite: 'strict',
           expires: new Date(Date.now() + Number(data.access_token_expiration_time)),
         });
+        const mfaEnabled = validateMfaStatus(data.access_token);
+        dispatch(setMfaEnabled(mfaEnabled));
         Cookies.set(REFRESH_TOKEN_COOKIE_NAME, data.refresh_token, {
           secure: true,
           sameSite: 'strict',
@@ -36,7 +40,7 @@ export const authEndpoints = (builder: Builder) => ({
       method: 'POST',
       body: credentials,
     }),
-    async onQueryStarted(_arg: OAuthLoginRequest, { queryFulfilled }: QueryFulfilled) {
+    async onQueryStarted(_arg: OAuthLoginRequest, { queryFulfilled, dispatch }: QueryFulfilled) {
       try {
         const { data } = await queryFulfilled;
         Cookies.set(TOKEN_COOKIE_NAME, data.access_token, {
@@ -44,6 +48,8 @@ export const authEndpoints = (builder: Builder) => ({
           sameSite: 'strict',
           expires: new Date(Date.now() + Number(data.access_token_expiration_time)),
         });
+        const mfaEnabled = validateMfaStatus(data.access_token);
+        dispatch(setMfaEnabled(mfaEnabled));
         Cookies.set(REFRESH_TOKEN_COOKIE_NAME, data.refresh_token, {
           secure: true,
           sameSite: 'strict',
@@ -76,6 +82,15 @@ export const authEndpoints = (builder: Builder) => ({
       } catch {
         console.error('Error registering user');
       }
+    },
+  }),
+  configureMfa: builder.mutation<MfaConfigureResponse, void>({
+    query: () => ({
+      url: 'auth/mfa/configure',
+      method: 'POST',
+    }),
+    transformResponse: (response: MfaConfigureResponse) => {
+      return response;
     },
   }),
 });
