@@ -1,5 +1,5 @@
 import { Middleware } from '@reduxjs/toolkit';
-import { setAppState } from '../slices/appState-slice';
+import { setAppState, setMfaCompleted, setMfaEnabled } from '../slices/appState-slice';
 import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../../utils/constants';
 import Cookies from 'js-cookie';
 
@@ -12,6 +12,8 @@ export const authMiddleware: Middleware = () => (next) => (action) => {
   if (!token && window.location.pathname !== '/login') {
     // If we have a refresh token, we'll try to refresh when making the next API call
     if (!refreshToken) {
+      next(setMfaCompleted(false));
+      next(setMfaEnabled(false));
       next(setAppState('NOT_LOGGED_IN'));
     }
     return next(action);
@@ -27,6 +29,8 @@ export const authMiddleware: Middleware = () => (next) => (action) => {
         // Token is expired, but we'll try to refresh when making the next API call
         if (!refreshToken) {
           Cookies.remove(TOKEN_COOKIE_NAME);
+          next(setMfaCompleted(false));
+          next(setMfaEnabled(false));
           next(setAppState('NOT_LOGGED_IN'));
         }
       }
@@ -34,6 +38,8 @@ export const authMiddleware: Middleware = () => (next) => (action) => {
       // If token is invalid, remove it and set state to NOT_LOGGED_IN
       Cookies.remove(TOKEN_COOKIE_NAME);
       Cookies.remove(REFRESH_TOKEN_COOKIE_NAME);
+      next(setMfaCompleted(false));
+      next(setMfaEnabled(false));
       next(setAppState('NOT_LOGGED_IN'));
     }
   }

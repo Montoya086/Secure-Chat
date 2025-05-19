@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { setAppState } from '../store/slices/appState-slice';
+import { setAppState, setMfaCompleted, setMfaEnabled } from '../store/slices/appState-slice';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import useAuth from '../hooks/useAuth';
 import { useGoogleLogin } from '@react-oauth/google';
+import { validateMfaStatus } from '../utils/validateMfaStatus';
 
 //Definición de colores de la paleta
 const colors = {
