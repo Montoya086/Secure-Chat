@@ -216,6 +216,11 @@ def oauth_login():
 @token_required
 def configure_mfa(current_user):
     username = current_user['email']
+    has_mfa = current_user['mfa_enabled']
+    mfa_secret = current_user['mfa_secret']
+    if has_mfa and mfa_secret:
+        return jsonify({'qrcode': None})
+
     mfa_secret = pyotp.random_base32()
     db = get_db()
     db.users.update_one({'email': username}, {'$set': {'mfa_secret': mfa_secret}})
