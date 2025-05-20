@@ -1,8 +1,8 @@
-import { useLoginMutation, useRegisterMutation, useOauthLoginMutation } from "../store/api/baseApi-slice";
+import { useLoginMutation, useRegisterMutation, useOauthLoginMutation, useConfigureMfaMutation, useVerifyMfaMutation } from "../store/api/baseApi-slice";
 import { useState } from "react";
 import { OAuthProvider } from "../store/api/types";
 import { useDispatch } from "react-redux";
-import { setAppState } from "../store/slices/appState-slice";
+import { setAppState, setMfaCompleted, setMfaEnabled } from "../store/slices/appState-slice";
 import Cookies from 'js-cookie';
 import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../utils/constants';
 
@@ -10,6 +10,8 @@ const useAuth = () => {
     const [handleLoginMutation, { isLoading: isLoginLoading }] = useLoginMutation();
     const [handleRegisterMutation, { isLoading: isRegisterLoading }] = useRegisterMutation();
     const [handleOauthLoginMutation, { isLoading: isOauthLoginLoading }] = useOauthLoginMutation();
+    const [handleConfigureMfaMutation, { isLoading: isConfigureMfaLoading }] = useConfigureMfaMutation();
+    const [handleVerifyMfaMutation, { isLoading: isVerifyMfaLoading }] = useVerifyMfaMutation();
     const [error, setError] = useState<string | null>(null);
     const dispatch = useDispatch();
     const handleLogin = async (email: string, password: string, callback: () => void) => {
@@ -21,6 +23,28 @@ const useAuth = () => {
             }
         } catch (err: any) {
             setError(err.data?.message || 'Error al iniciar sesión');
+            console.error(err);
+        }
+    }
+
+    const handleVerifyMfa = async (otp: string, callback: (valid: boolean) => void) => {
+        setError(null);
+        try {
+            const response = await handleVerifyMfaMutation({ otp }).unwrap();
+            callback(response.valid);
+        } catch (err: any) {
+            setError(err.data?.message || 'Error al verificar MFA');
+            console.error(err);
+        }
+    }
+
+    const handleConfigureMfa = async (callback: (qrcode: string) => void) => {
+        setError(null);
+        try {
+            const response = await handleConfigureMfaMutation().unwrap();
+            callback(response.qrcode);
+        } catch (err: any) {
+            setError(err.data?.message || 'Error al configurar MFA');
             console.error(err);
         }
     }
@@ -53,6 +77,8 @@ const useAuth = () => {
 
     const handleLogout = () => {
         dispatch(setAppState('NOT_LOGGED_IN'));
+        dispatch(setMfaCompleted(false));
+        dispatch(setMfaEnabled(false));
         Cookies.remove(TOKEN_COOKIE_NAME);
         Cookies.remove(REFRESH_TOKEN_COOKIE_NAME);
     };
@@ -62,9 +88,13 @@ const useAuth = () => {
         handleRegister, 
         handleOauthLogin,
         handleLogout,
+        handleConfigureMfa,
+        handleVerifyMfa,
         isLoginLoading,
         isRegisterLoading,
         isOauthLoginLoading,
+        isConfigureMfaLoading,
+        isVerifyMfaLoading,
         error
     };
 }
