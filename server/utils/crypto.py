@@ -1,7 +1,33 @@
+from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization
 import base64
+
+
+# generar una clave simétrica AES
+def generate_ecc_key():
+    return ec.generate_private_key(ec.SECP256R1())
+
+# firmar mensaje con ECDSA private key del remitente
+def sign_message(private_key, message):
+    return private_key.sign(
+        message,
+        ec.ECDSA(hashes.SHA256())
+    )
+
+# verificar firma public key del destinatario
+def verify_signature(public_key, signature, message):
+    try:
+        public_key.verify(
+            signature,
+            message,
+            ec.ECDSA(hashes.SHA256())
+        )
+        return True
+    except:
+        return False
 
 def generate_key_pair():
     # generate a private key

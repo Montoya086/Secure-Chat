@@ -6,6 +6,13 @@ from config.database import get_db
 from utils.crypto import generate_key_pair, get_public_key_pem, get_private_key_pem
 from middleware.jwt import token_required
 from blockchain.chain import blockchain 
+from aes.aes import encrypt_aes_gcm, decrypt_aes_gcm
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
+import os
+import base64
+from bson.objectid import ObjectId
 
 #Imports para hashing
 from config.database import get_db
@@ -99,3 +106,42 @@ def enviar_mensaje_firmado(current_user, user_destino):
     blockchain.add_block(bloque_data)
 
     return jsonify({"mensaje": "Mensaje firmado y registrado en el blockchain"}), 201
+
+@chat_bp.route('/send', methods=['POST'])
+@token_required
+def send_message(current_user):
+    data = request.get_json()
+    db = get_db()
+    
+    # obtener key publica del destinatario
+    recipient = db.users.find_one({'_id': ObjectId(data['recipient_id'])})
+    recipient_public_key = serialization.load_pem_public_key(recipient['public_key'].encode())
+    
+    # generar clave AES aleatoria para el mensaje
+    aes_key = os.urandom(32)
+    
+    # cifrar mensaje con AES
+    iv, ciphertext, tag = encrypt_aes_gcm(data['message'].encode(), aes_key)
+    
+    # cifrar clave AES con RSA del destinatario
+    encrypted_aes_key = recipient_public_key.encrypt(
+        aes_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+    
+    # save message to database
+    db.messages.insert_one({
+        'sender_id': current_user['_id'],
+        'recipient_id': ObjectId(data['recipient_id']),
+        'ciphertext': base64.b64encode(ciphertext).decode(),
+        'iv': base64.b64encode(iv).decode(),
+        'tag': base64.b64encode(tag).decode(),
+        'encrypted_key': base64.b64encode(encrypted_aes_key).decode(),
+        'timestamp': datetime.utcnow()
+    })
+    
+    return jsonify({'status': 'Message sent'}), 200
