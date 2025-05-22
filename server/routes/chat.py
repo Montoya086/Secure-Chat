@@ -11,6 +11,7 @@ from blockchain.chain import blockchain
 from config.database import get_db
 from hashing.signing import sign_message
 from bson.objectid import ObjectId
+from hashing.encryption import cifrar_y_firmar_msj, verificar_y_descifrar_msj
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -50,23 +51,11 @@ def obtener_transacciones(current_user):
     return jsonify(cadena), 200
 
 '''
-Manda un mensaje firmado digitalmente (ECDSA) y lo registra en el blockchain
-
-Args:
-    current_user: Usuario autenticado vía token JWT
-    user_destino: ID o nombre del usuario receptor (texto de la URL)
-
-Body JSON:
-    {
-        "mensaje": "Hola Mundo!"
-    }
-
-Returns:
-    JSON con confirmación de registro
+Envía un mensaje cifrado con ECDH+AES y firmado con ECDSA
 '''
 @chat_bp.route('/messages/<user_destino>', methods=['POST'])
 @token_required
-def enviar_mensaje_firmado(current_user, user_destino):
+def enviar_mensaje_cifrado_firmado(current_user, user_destino):
     db = get_db()
     data = request.get_json()
     mensaje = data.get('mensaje')
@@ -74,28 +63,139 @@ def enviar_mensaje_firmado(current_user, user_destino):
     if not mensaje:
         return jsonify({'error': 'Mensaje es requerido'}), 400
 
-    #Obtener info del emisor desde la base de datos
+    #Obtener info del emisor
     emisor = db.users.find_one({'_id': ObjectId(current_user['_id'])})
     if not emisor:
         return jsonify({'error': 'Usuario emisor no encontrado'}), 404
 
-    private_key_pem = emisor['private_key']
+    #Obtener info del receptor por email o nombre
+    receptor = db.users.find_one({
+        '$or': [
+            {'email': user_destino},
+            {'givenName': user_destino},
+            {'$expr': {'$eq': [{'$concat': ['$givenName', ' ', '$familyName']}, user_destino]}}
+        ]
+    })
+    
+    if not receptor:
+        return jsonify({'error': 'Usuario receptor no encontrado'}), 404
 
-    #Firmar el mensaje con la clave privada
-    firma = sign_message(private_key_pem, mensaje)
+    try:
+        #Cifrar y firmar mensaje
+        datos_seguros = cifrar_y_firmar_msj(
+            mensaje,
+            emisor['private_key'],
+            receptor['public_key']
+        )
 
-    #Preparar el bloque para el blockchain con la firma
-    bloque_data = {
-        "nombre": emisor["givenName"] + " " + emisor["familyName"],
-        "fecha_envio": datetime.utcnow().isoformat(),
-        "data_enviada": {
-            "mensaje": mensaje,
-            "firma": firma,
-            "destino": user_destino
+        #Preparar bloque para blockchain
+        bloque_data = {
+            "nombre": emisor["givenName"] + " " + emisor["familyName"],
+            "fecha_envio": datetime.utcnow().isoformat(),
+            "data_enviada": {
+                "receptor_id": str(receptor['_id']),
+                "receptor_email": receptor['email'],
+                "datos_cifrados": datos_seguros['datos_cifrados'],
+                "firma": datos_seguros['firma'],
+                "destino": user_destino
+            }
         }
-    }
 
-    #Guardar el mensaje como bloque en el blockchain
-    blockchain.add_block(bloque_data)
+        #Guardar en blockchain
+        blockchain.add_block(bloque_data)
 
-    return jsonify({"mensaje": "Mensaje firmado y registrado en el blockchain"}), 201
+        return jsonify({
+            "mensaje": "Mensaje cifrado, firmado y registrado en blockchain",
+            "receptor": receptor['email'],
+            "timestamp": bloque_data["fecha_envio"]
+        }), 201
+
+    except Exception as e:
+        return jsonify({'error': f'Error al procesar mensaje: {str(e)}'}), 500
+    
+
+'''
+Obtiene mensajes cifrados, los descifra y verifica firmas
+'''
+@chat_bp.route('/messages/<user_origen>/<user_destino>', methods=['GET'])
+@token_required
+def obtener_mensajes_cifrados(current_user, user_origen, user_destino):
+    db = get_db()
+    
+    #Verificar acceso
+    usuario_actual = current_user['email']
+    if usuario_actual != user_origen and usuario_actual != user_destino:
+        return jsonify({'error': 'No tienes acceso a estos mensajes'}), 403
+
+    #Obtener datos del usuario actual para descifrar
+    usuario_actual_db = db.users.find_one({'email': usuario_actual})
+    if not usuario_actual_db:
+        return jsonify({'error': 'Usuario actual no encontrado'}), 404
+
+    mensajes_procesados = []
+
+    try:
+        for block in blockchain.chain:
+            if hasattr(block, 'data') and isinstance(block.data, dict):
+                data_enviada = block.data.get('data_enviada', {})
+                if isinstance(data_enviada, dict):
+                    destino = data_enviada.get('destino')
+                    nombre_emisor = block.data.get('nombre', '')
+                    
+                    #Filtrar mensajes relevantes
+                    if (destino == user_destino and user_origen.lower() in nombre_emisor.lower()) or \
+                        (data_enviada.get('receptor_email') == usuario_actual):
+                        
+                        datos_cifrados = data_enviada.get('datos_cifrados')
+                        firma = data_enviada.get('firma')
+                        
+                        if datos_cifrados and firma:
+                            #Determinar emisor y receptor para descifrado
+                            if usuario_actual == user_destino:
+                                #Yo soy el receptor, necesito la clave pública del emisor
+                                emisor_db = db.users.find_one({
+                                    '$expr': {'$eq': [{'$concat': ['$givenName', ' ', '$familyName']}, nombre_emisor]}
+                                })
+                                if emisor_db:
+                                    resultado = verificar_y_descifrar_msj(
+                                        {'datos_cifrados': datos_cifrados, 'firma': firma},
+                                        usuario_actual_db['private_key'],
+                                        emisor_db['public_key']
+                                    )
+                                else:
+                                    continue
+                            else:
+                                #Yo soy el emisor, necesito la clave pública del receptor
+                                receptor_db = db.users.find_one({'email': user_destino})
+                                if receptor_db:
+                                    resultado = verificar_y_descifrar_msj(
+                                        {'datos_cifrados': datos_cifrados, 'firma': firma},
+                                        usuario_actual_db['private_key'],
+                                        receptor_db['public_key']
+                                    )
+                                else:
+                                    continue
+
+                            mensajes_procesados.append({
+                                'id': block.hash,
+                                'emisor': nombre_emisor,
+                                'destino': destino,
+                                'mensaje': resultado.get('mensaje'),
+                                'fecha_envio': block.data.get('fecha_envio'),
+                                'firma_valida': resultado.get('firma_valida'),
+                                'cifrado_valido': resultado.get('cifrado_valido'),
+                                'error': resultado.get('error'),
+                                'timestamp': block.timestamp
+                            })
+
+        #Ordenar por timestamp
+        mensajes_procesados.sort(key=lambda x: x['timestamp'], reverse=True)
+
+        return jsonify({
+            'mensajes': mensajes_procesados,
+            'total': len(mensajes_procesados),
+            'usuario_actual': usuario_actual
+        }), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Error al procesar mensajes: {str(e)}'}), 500
