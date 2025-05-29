@@ -65,7 +65,7 @@ const MfaModal: React.FC<MfaModalProps> = ({ isOpen }) => {
                 />
               )}
               <div className="qrcode-buttons">
-                <button onClick={handleNext}>Continue</button>
+                <button onClick={handleNext} className="continue-button">Continue</button>
               </div>
             </div>
           </Fragment>
@@ -75,7 +75,7 @@ const MfaModal: React.FC<MfaModalProps> = ({ isOpen }) => {
             <div className="otp-container">
               <p>Enter the code from your authenticator app</p>
               <input type="text" placeholder="Code" onChange={(e) => otpRef.current = e.target.value}/>
-              <button onClick={handleNext}>Continue</button>
+              <button onClick={handleNext} className="continue-button">Continue</button>
               {allowBack && (
                 <div className="go-back" onClick={handleBack}>
                   Go back
