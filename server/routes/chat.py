@@ -6,7 +6,9 @@ from config.database import get_db
 from utils.crypto import generate_key_pair, get_public_key_pem, get_private_key_pem
 from middleware.jwt import token_required
 from blockchain.chain import blockchain 
-from aes.aes import encrypt_aes_gcm, decrypt_aes_gcm
+from aes.aes import encrypt_aes_gcm, decrypt_aes_gcm, serialize_aes_components, deserialize_aes_components, generate_aes_key
+from rsa.rsa import encrypt_with_public_key, decrypt_with_private_key
+from aes.key_exchange import GroupKeyManager
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
@@ -107,41 +109,117 @@ def enviar_mensaje_firmado(current_user, user_destino):
 
     return jsonify({"mensaje": "Mensaje firmado y registrado en el blockchain"}), 201
 
-@chat_bp.route('/send', methods=['POST'])
+
+# send messages to a specific user
+@chat_bp.route('/messages/<recipient_id>', methods=['POST'])
 @token_required
-def send_message(current_user):
-    data = request.get_json()
+def send_private_message(current_user, recipient_id):
     db = get_db()
+    data = request.get_json()
     
-    # obtener key publica del destinatario
-    recipient = db.users.find_one({'_id': ObjectId(data['recipient_id'])})
-    recipient_public_key = serialization.load_pem_public_key(recipient['public_key'].encode())
+    # obtener clave pública del destinatario
+    recipient = db.users.find_one({'_id': ObjectId(recipient_id)})
+    if not recipient:
+        return jsonify({'error': 'Recipient not found'}), 404
     
-    # generar clave AES aleatoria para el mensaje
-    aes_key = os.urandom(32)
+    # generar clave AES para este mensaje
+    aes_key = generate_aes_key()
     
-    # cifrar mensaje con AES
-    iv, ciphertext, tag = encrypt_aes_gcm(data['message'].encode(), aes_key)
+    # cifrar el mensaje con AES
+    nonce, ciphertext, tag = encrypt_aes_gcm(data['message'], aes_key)
     
-    # cifrar clave AES con RSA del destinatario
-    encrypted_aes_key = recipient_public_key.encrypt(
-        aes_key,
-        padding.OAEP(
-            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-            algorithm=hashes.SHA256(),
-            label=None
-        )
-    )
+    # cifrar la clave AES con la clave pública del destinatario
+    encrypted_key = encrypt_with_public_key(aes_key, recipient['public_key'])
     
-    # save message to database
-    db.messages.insert_one({
+    # almacenar el mensaje
+    message = {
         'sender_id': current_user['_id'],
-        'recipient_id': ObjectId(data['recipient_id']),
-        'ciphertext': base64.b64encode(ciphertext).decode(),
-        'iv': base64.b64encode(iv).decode(),
-        'tag': base64.b64encode(tag).decode(),
-        'encrypted_key': base64.b64encode(encrypted_aes_key).decode(),
-        'timestamp': datetime.utcnow()
-    })
+        'recipient_id': ObjectId(recipient_id),
+        'ciphertext': base64.b64encode(ciphertext).decode('utf-8'),
+        'nonce': base64.b64encode(nonce).decode('utf-8'),
+        'tag': base64.b64encode(tag).decode('utf-8'),
+        'encrypted_key': base64.b64encode(encrypted_key).decode('utf-8'),
+        'timestamp': datetime.utcnow(),
+        'is_group': False
+    }
+    
+    db.messages.insert_one(message)
     
     return jsonify({'status': 'Message sent'}), 200
+
+
+# recebe messages for the current user
+@chat_bp.route('/messages', methods=['GET'])
+@token_required
+def get_messages(current_user):
+    db = get_db()
+    
+    # obtener mensajes para el usuario actual
+    messages = db.messages.find({
+        '$or': [
+            {'recipient_id': current_user['_id']},
+            {'sender_id': current_user['_id']}
+        ]
+    }).sort('timestamp', -1)
+    
+    decrypted_messages = []
+    for msg in messages:
+        # descifrar la clave AES con nuestra clave privada
+        encrypted_key = base64.b64decode(msg['encrypted_key'])
+        aes_key = decrypt_with_private_key(encrypted_key, current_user['private_key'])
+        
+        # descifrar el mensaje
+        nonce, ciphertext, tag = (
+            base64.b64decode(msg['nonce']),
+            base64.b64decode(msg['ciphertext']),
+            base64.b64decode(msg['tag'])
+        )
+        
+        plaintext = decrypt_aes_gcm(ciphertext, aes_key, nonce, tag)
+        
+        decrypted_messages.append({
+            'id': str(msg['_id']),
+            'sender_id': str(msg['sender_id']),
+            'recipient_id': str(msg['recipient_id']),
+            'content': plaintext.decode('utf-8'),
+            'timestamp': msg['timestamp'],
+            'is_group': msg.get('is_group', False)
+        })
+    
+    return jsonify(decrypted_messages), 200
+
+# send messages to a group
+@chat_bp.route('/group/<group_id>/messages', methods=['POST'])
+@token_required
+def send_group_message(current_user, group_id):
+    db = get_db()
+    data = request.get_json()
+    
+    # obtener la clave AES del grupo
+    key_manager = GroupKeyManager(db)
+    try:
+        aes_key = key_manager.get_group_key_for_user(
+            group_id, 
+            current_user['_id'], 
+            current_user['private_key']
+        )
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 403
+    
+    # cifrar el mensaje con la clave del grupo
+    nonce, ciphertext, tag = encrypt_aes_gcm(data['message'], aes_key)
+    
+    # almacenar el mensaje
+    message = {
+        'sender_id': current_user['_id'],
+        'group_id': ObjectId(group_id),
+        'ciphertext': base64.b64encode(ciphertext).decode('utf-8'),
+        'nonce': base64.b64encode(nonce).decode('utf-8'),
+        'tag': base64.b64encode(tag).decode('utf-8'),
+        'timestamp': datetime.utcnow(),
+        'is_group': True
+    }
+    
+    db.messages.insert_one(message)
+    
+    return jsonify({'status': 'Group message sent'}), 200
