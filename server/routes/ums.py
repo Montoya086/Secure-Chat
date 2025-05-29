@@ -11,6 +11,8 @@ import qrcode
 import io
 import base64
 
+from hashing.signing import generate_ecdsa_key_pair, get_ecdsa_private_key_pem, get_ecdsa_public_key_pem
+
 auth_bp = Blueprint('auth', __name__)
 
 def generate_tokens(user_id, provider = 'local', mfa_enabled = False):
@@ -43,38 +45,59 @@ def generate_tokens(user_id, provider = 'local', mfa_enabled = False):
     return access_token, refresh_token
 
 # --- AUXILIARY FUNCTIONS ---
-def create_user(db, email, givenName, familyName, password=None, providers=None, picture=None):
+def create_user(db, email, givenName, familyName, password=None, providers=None, picture=None, key_type='rsa'):
     """
     Create a new user in the database.
     Args:
-        db: The database object.
-        email: The email of the user.
-        givenName: The given name of the user.
-        familyName: The family name of the user.
-        password: The password of the user.
-        providers: The providers of the user.
-        picture: The picture of the user.
+        key_type: 'rsa' para cifrado/descifrado, 'ecdsa' para firma digital, 'both' para ambos
     """
-    # generate key pair for encryption
-    private_key, public_key = generate_key_pair()
-    private_key_pem = get_private_key_pem(private_key).decode('utf-8')
-    public_key_pem = get_public_key_pem(public_key).decode('utf-8')
-    # create user
+    if key_type == 'rsa' or key_type == 'both':
+        # Claves RSA para cifrado
+        private_key, public_key = generate_key_pair()
+        private_key_pem = get_private_key_pem(private_key).decode('utf-8')
+        public_key_pem = get_public_key_pem(public_key).decode('utf-8')
+    
+    if key_type == 'ecdsa' or key_type == 'both':
+        # Claves ECDSA para firma
+        signing_private_key, signing_public_key = generate_ecdsa_key_pair()
+        signing_private_key_pem = get_ecdsa_private_key_pem(signing_private_key).decode('utf-8')
+        signing_public_key_pem = get_ecdsa_public_key_pem(signing_public_key).decode('utf-8')
+    
+    # Crear usuario base
     user = {
         'email': email,
         'givenName': givenName,
         'familyName': familyName,
         'providers': providers or ['local'],
-        'private_key': private_key_pem,
-        'public_key': public_key_pem,
         'created_at': datetime.utcnow(),
         'mfa_secret': None,
         'mfa_enabled': False
     }
+    
+    # Agregar claves según el tipo
+    if key_type == 'rsa':
+        user.update({
+            'private_key': private_key_pem,
+            'public_key': public_key_pem
+        })
+    elif key_type == 'ecdsa':
+        user.update({
+            'signing_private_key': signing_private_key_pem,
+            'signing_public_key': signing_public_key_pem
+        })
+    elif key_type == 'both':
+        user.update({
+            'private_key': private_key_pem,
+            'public_key': public_key_pem,
+            'signing_private_key': signing_private_key_pem,
+            'signing_public_key': signing_public_key_pem
+        })
+    
     if password:
         user['password'] = generate_password_hash(password)
     if picture:
         user['picture'] = picture
+    
     return db.users.insert_one(user)
 
 def token_response(user_id, mfa_enabled, provider='local', status_code=200, message=None):
@@ -273,4 +296,26 @@ def verify_mfa(current_user):
         return jsonify({'valid': True}), 200
     else:
         return jsonify({'error': 'Invalid OTP'}), 400
+
+
+@auth_bp.route('/users', methods=['GET'])
+@token_required
+def get_users(current_user):
+    db = get_db()
+    users = db.users.find({}, {
+        'email': 1, 
+        'givenName': 1, 
+        'familyName': 1, 
+        'created_at': 1
+    })
     
+    users_list = []
+    for user in users:
+        users_list.append({
+            'id': str(user['_id']),
+            'email': user['email'],
+            'name': f"{user['givenName']} {user['familyName']}",
+            'created_at': user.get('created_at', '')
+        })
+    
+    return jsonify(users_list), 200
