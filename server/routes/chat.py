@@ -52,11 +52,9 @@ def chat(current_user):
 @token_required
 def obtener_transacciones(current_user):
     """
-    Devuelve la lista de todos los bloques del blockchain.
-    Útil para auditoría o historial de mensajes.
+    Devuelve toda la cadena de bloques (blockchain) con los mensajes registrados.
     """
-    cadena = [block.__dict__ for block in blockchain.chain]
-    return jsonify(cadena), 200
+    return jsonify(blockchain.to_list()), 200
 
 '''
 Manda un mensaje firmado digitalmente (ECDSA) y lo registra en el blockchain

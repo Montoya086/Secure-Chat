@@ -43,6 +43,12 @@ class Blockchain:
                 return False  # El enlace entre bloques fue alterado
 
         return True  # La cadena es válida
+    def to_list(self):
+        """
+        Devuelve la blockchain completa como una lista de diccionarios (JSON serializable)
+        """
+        return [block.to_dict() for block in self.chain]
+    
 
 # ✅ Instancia global del blockchain
 blockchain = Blockchain()
