@@ -1,0 +1,133 @@
+/* Contenedor principal */
+.container {
+  display: flex;
+  height: 100vh;
+  font-family: Arial, sans-serif;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 300px;
+  background-color: #f0f0f0;
+  border-right: 1px solid #ccc;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.logout-btn {
+  background-color: #d9534f;
+  color: white;
+  border: none;
+  padding: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.chat-item {
+  padding: 10px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  background-color: #ffffff;
+  transition: background-color 0.2s;
+}
+
+.chat-item:hover {
+  background-color: #e6e6e6;
+}
+
+.chat-item.active {
+  background-color: #cce5ff;
+}
+
+.last-message {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+/* Panel de chat */
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: #e5ddd5;
+}
+
+.chat-header {
+  padding: 15px;
+  background-color: #075e54;
+  color: white;
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.chat-messages {
+  flex: 1;
+  padding: 15px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Burbujas de mensajes */
+.message {
+  max-width: 60%;
+  padding: 10px;
+  border-radius: 8px;
+  position: relative;
+  background-color: #fff;
+  word-wrap: break-word;
+}
+
+.message.left {
+  align-self: flex-start;
+  background-color: #ffffff;
+  border: 1px solid #ccc;
+}
+
+.message.right {
+  align-self: flex-end;
+  background-color: #dcf8c6;
+}
+
+/* Marca de tiempo */
+.timestamp {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 5px;
+  text-align: right;
+}
+
+/* Área de entrada de texto */
+.input-area {
+  display: flex;
+  padding: 10px;
+  background-color: #f7f7f7;
+  border-top: 1px solid #ccc;
+}
+
+.input-area input {
+  flex: 1;
+  padding: 10px;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  margin-right: 10px;
+}
+
+.input-area button {
+  padding: 10px 15px;
+  font-size: 1rem;
+  background-color: #075e54;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.input-area button:hover {
+  background-color: #064c45;
+}

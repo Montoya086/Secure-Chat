@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { setAppState } from '../store/slices/appState-slice';
+import { setAppState, setMfaCompleted, setMfaEnabled } from '../store/slices/appState-slice';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import useAuth from '../hooks/useAuth';
 import { useGoogleLogin } from '@react-oauth/google';
+import { validateMfaStatus } from '../utils/validateMfaStatus';
 
 //Definición de colores de la paleta
 const colors = {
@@ -23,7 +24,7 @@ const Login = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const location = useLocation();
-  const { handleLogin, isLoginLoading } = useAuth();
+  const { handleLogin, handleOauthLogin, isLoginLoading } = useAuth();
   const from = location.state?.from?.pathname || '/';
   const [showPassword, setShowPassword] = useState(false);
 
@@ -31,7 +32,10 @@ const Login = () => {
     redirect_uri: redirectUri,
     flow: 'auth-code',
     onSuccess: (tokenResponse) => {
-      console.log("Google login response", tokenResponse);
+      handleOauthLogin(tokenResponse.code, 'google', () => {
+        dispatch(setAppState('LOGGED_IN'));
+        navigate(from, { replace: true });
+      });
     },
     onError: (error) => {
       console.log("Google login error", error);
