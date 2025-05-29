@@ -6,9 +6,9 @@ from config.database import get_db
 from utils.crypto import generate_key_pair, get_public_key_pem, get_private_key_pem
 from middleware.jwt import token_required
 from blockchain.chain import blockchain 
-from aes.aes import encrypt_aes_gcm, decrypt_aes_gcm, serialize_aes_components, deserialize_aes_components, generate_aes_key
-from rsa.rsa import encrypt_with_public_key, decrypt_with_private_key
-from aes.key_exchange import GroupKeyManager
+from aes_crypto.aesCrypto import encrypt_aes_gcm, decrypt_aes_gcm, serialize_aes_components, deserialize_aes_components, generate_aes_key
+from rsa_crypto.rsaCrypto import encrypt_with_public_key, decrypt_with_private_key
+from aes_crypto.key_exchange import GroupKeyManager
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
@@ -18,7 +18,7 @@ from bson.objectid import ObjectId
 
 #Imports para hashing
 from config.database import get_db
-from hashing.signing import sign_message
+from hashing.signing import sign_message, verify_signature
 from bson.objectid import ObjectId
 
 chat_bp = Blueprint('chat', __name__)
@@ -88,10 +88,11 @@ def enviar_mensaje_firmado(current_user, user_destino):
     if not emisor:
         return jsonify({'error': 'Usuario emisor no encontrado'}), 404
 
-    private_key_pem = emisor['private_key']
+    #Usar clave de firma si existe, sino usar clave RSA
+    signing_key = emisor.get('signing_private_key', emisor['private_key'])
 
-    #Firmar el mensaje con la clave privada
-    firma = sign_message(private_key_pem, mensaje)
+    #Firmar el mensaje con la clave privada (ahora usa signing_key en lugar de private_key_pem)
+    firma = sign_message(signing_key, mensaje)
 
     #Preparar el bloque para el blockchain con la firma
     bloque_data = {
@@ -108,7 +109,6 @@ def enviar_mensaje_firmado(current_user, user_destino):
     blockchain.add_block(bloque_data)
 
     return jsonify({"mensaje": "Mensaje firmado y registrado en el blockchain"}), 201
-
 
 # send messages to a specific user
 @chat_bp.route('/messages/<recipient_id>', methods=['POST'])
@@ -223,3 +223,53 @@ def send_group_message(current_user, group_id):
     db.messages.insert_one(message)
     
     return jsonify({'status': 'Group message sent'}), 200
+
+
+#Endpoint para verificar mensajes firmados
+@chat_bp.route('/messages/verify/<message_id>', methods=['GET'])
+@token_required
+#Verifica la firma de un mensaje específico del blockchain
+def verificar_mensaje_firmado(current_user, message_id):
+    db = get_db()
+    
+    #Buscar el bloque en el blockchain por índice o contenido
+    bloque_encontrado = None
+    for bloque in blockchain.chain:
+        if hasattr(bloque, 'data') and isinstance(bloque.data, dict):
+            if bloque.data.get('data_enviada', {}).get('message_id') == message_id:
+                bloque_encontrado = bloque
+                break
+    
+    if not bloque_encontrado:
+        return jsonify({'error': 'Mensaje no encontrado'}), 404
+    
+    #Extraer datos del mensaje
+    data_enviada = bloque_encontrado.data['data_enviada']
+    mensaje = data_enviada['mensaje']
+    firma = data_enviada['firma']
+    nombre_emisor = bloque_encontrado.data['nombre']
+    
+    #Buscar la clave pública del emisor
+    emisor = db.users.find_one({
+        '$expr': {
+            '$eq': [
+                {'$concat': ['$givenName', ' ', '$familyName']}, 
+                nombre_emisor
+            ]
+        }
+    })
+    
+    if not emisor:
+        return jsonify({'error': 'Emisor no encontrado'}), 404
+    
+    #Verificar la firma
+    es_valida = verify_signature(emisor['public_key'], mensaje, firma)
+    
+    return jsonify({
+        'message_id': message_id,
+        'sender': nombre_emisor,
+        'message': mensaje,
+        'signature_valid': es_valida,
+        'timestamp': bloque_encontrado.data['fecha_envio']
+    }), 200
+
