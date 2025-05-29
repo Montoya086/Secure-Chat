@@ -1,5 +1,5 @@
-from .aes import generate_aes_key, encrypt_aes_gcm, decrypt_aes_gcm
-from .rsa import encrypt_with_public_key, decrypt_with_private_key
+from aes import generate_aes_key, encrypt_aes_gcm, decrypt_aes_gcm
+from rsa.rsa import encrypt_with_public_key, decrypt_with_private_key
 import base64
 
 class GroupKeyManager:
@@ -10,7 +10,7 @@ class GroupKeyManager:
         """Crea una nueva clave AES para un grupo"""
         aes_key = generate_aes_key()
         
-        # Almacenar la clave en la base de datos (cifrada con la clave del admin)
+        # Almacenar la clave en la base de datos
         self.db.groups.update_one(
             {'_id': group_id},
             {'$set': {'aes_key': aes_key.hex()}},
