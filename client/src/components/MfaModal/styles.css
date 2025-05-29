@@ -1,0 +1,83 @@
+.modal-content {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #fff;
+  z-index: 1300;
+}
+
+.qrcode-container, .otp-container {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(60, 60, 60, 0.15);
+  border: 1px solid #e0e0e0;
+  padding: 2.5em 2em 2em 2em;
+  min-width: 350px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5em;
+}
+
+.qrcode-title {
+  color: #1b4332;
+  font-size: 1.2em;
+  font-weight: 600;
+  margin-bottom: 0.5em;
+  text-align: center;
+}
+
+.qrcode {
+  width: 180px;
+  height: 180px;
+  margin-bottom: 1em;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 0.7em 1em;
+  border: 1px solid #bdbdbd;
+  border-radius: 6px;
+  font-size: 1em;
+  outline: none;
+  margin-bottom: 0.5em;
+  transition: border 0.2s;
+}
+input[type="text"]:focus {
+  border: 1.5px solid #1b4332;
+}
+
+.continue-button {
+  width: 100%;
+  padding: 0.7em 0;
+  background: #1b4332;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 1em;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 0.5em;
+  transition: background 0.2s;
+}
+.continue-button:hover {
+  background: #14532d;
+}
+
+.qrcode-buttons {
+  width: 100%;
+}
+
+.go-back {
+  color: #1b4332;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 0.95em;
+  margin-top: 0.5em;
+  text-align: center;
+}

@@ -16,6 +16,7 @@ def token_required(f):
         
         # if the token is not in the header, return an error
         if not token:
+            print("Token is missing")
             return jsonify({'error': 'Token is missing'}), 401
         
         try:
@@ -24,20 +25,24 @@ def token_required(f):
             
             # Check if token is an access token
             if data.get('type') != 'access':
+                print("Invalid token type", data.get('type'))
                 return jsonify({'error': 'Invalid token type'}), 401
             
             db = get_db()
-            current_user = db.users.find_one({'_id': ObjectId(data['user_id'])})
+            current_user = db.users.find_one({'_id': ObjectId(data['sub'])})
             
             # if the user is not found, return an error
             if not current_user:
+                print("User not found")
                 return jsonify({'error': 'User not found'}), 401
 
         except jwt.ExpiredSignatureError:
             # if the token has expired, return an error
+            print("Token has expired")
             return jsonify({'error': 'Token has expired'}), 401
         except jwt.InvalidTokenError:
             # if the token is invalid, return an error
+            print("Invalid token")
             return jsonify({'error': 'Invalid token'}), 401
         
         # return the user
