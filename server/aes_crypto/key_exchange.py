@@ -1,5 +1,5 @@
-from aes import generate_aes_key, encrypt_aes_gcm, decrypt_aes_gcm
-from rsa.rsa import encrypt_with_public_key, decrypt_with_private_key
+from aes_crypto.aesCrypto import generate_aes_key, encrypt_aes_gcm, decrypt_aes_gcm
+from rsa_crypto.rsaCrypto import encrypt_with_public_key, decrypt_with_private_key
 import base64
 
 class GroupKeyManager:
