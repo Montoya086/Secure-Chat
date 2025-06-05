@@ -125,6 +125,25 @@ def send_secure_message(current_user, user_destino):
         
         result = db.messages.insert_one(mensaje_seguro)
         
+        # === PASO 5: REGISTRAR TRANSACCIÓN EN BLOCKCHAIN ===
+        bloque_data = {
+            "tipo": "mensaje_seguro",
+            "mensaje_id": str(result.inserted_id),
+            "contenido_cifrado": base64.b64encode(ciphertext).decode('utf-8'),
+            "emisor": {
+                "id": str(emisor['_id']),
+                "nombre": f"{emisor['givenName']} {emisor['familyName']}",
+                "email": emisor['email']
+            },
+            "receptor": {
+                "id": str(destinatario['_id']),
+                "nombre": f"{destinatario['givenName']} {destinatario['familyName']}",
+                "email": destinatario['email']
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        blockchain.add_block(bloque_data)
+
         return jsonify({
             'status': 'Mensaje seguro enviado exitosamente',
             'message_id': str(result.inserted_id),
