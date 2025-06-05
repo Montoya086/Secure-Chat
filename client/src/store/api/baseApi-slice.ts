@@ -79,7 +79,7 @@ export const baseQueryWithReauth = async (
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
-  tagTypes: ['User', 'Message', 'Conversation'],
+  tagTypes: ['User', 'Message', 'Conversation', 'Group', 'GroupMessage'],
   endpoints: (builder) => ({
     ...authEndpoints(builder),
     ...chatEndpoints(builder),
@@ -94,10 +94,18 @@ export const {
   useConfigureMfaMutation,
   useVerifyMfaMutation,
   
-  // Nuevos hooks para chat
+  // Chat hooks existentes
   useGetUsersQuery,
   useGetConversationQuery,
   useLazyGetConversationQuery,
   useSendMessageMutation,
   useGetUserPublicKeyQuery,
+  
+  // Nuevos hooks para grupos
+  useGetGroupsQuery,
+  useCreateGroupMutation,
+  useAddGroupMemberMutation,
+  useGetGroupMessagesQuery,
+  useLazyGetGroupMessagesQuery,
+  useSendGroupMessageMutation,
 } = apiSlice;

@@ -40,4 +40,53 @@ export const chatEndpoints = (builder: Builder) => ({
   getUserPublicKey: builder.query<UserPublicKeyResponse, string>({
     query: (userId) => `chat/users/${userId}/key`,
   }),
+
+   // Obtener todos los grupos del usuario
+  getGroups: builder.query<GetGroupsResponse, void>({
+    query: () => 'chat/groups',
+    providesTags: ['Group'],
+  }),
+
+  // Crear un nuevo grupo
+  createGroup: builder.mutation<CreateGroupResponse, CreateGroupRequest>({
+    query: (data) => ({
+      url: 'chat/groups',
+      method: 'POST',
+      body: data,
+    }),
+    invalidatesTags: ['Group'],
+  }),
+
+  // Agregar miembro a grupo
+  addGroupMember: builder.mutation<AddGroupMemberResponse, { groupId: string; data: AddGroupMemberRequest }>({
+    query: ({ groupId, data }) => ({
+      url: `chat/groups/${groupId}/members`,
+      method: 'POST',
+      body: data,
+    }),
+    invalidatesTags: ['Group'],
+  }),
+
+  // Obtener mensajes de un grupo
+  getGroupMessages: builder.query<GroupConversationResponse, string>({
+    query: (groupId) => `chat/groups/${groupId}/messages`,
+    providesTags: (result, error, groupId) => [
+      { type: 'GroupMessage', id: groupId },
+      { type: 'Message', id: 'LIST' }
+    ],
+  }),
+
+  // Enviar mensaje a grupo
+  sendGroupMessage: builder.mutation<SendGroupMessageResponse, { groupId: string; data: SendGroupMessageRequest }>({
+    query: ({ groupId, data }) => ({
+      url: `chat/groups/${groupId}/messages`,
+      method: 'POST',
+      body: data,
+    }),
+    invalidatesTags: (result, error, { groupId }) => [
+      { type: 'GroupMessage', id: groupId },
+      { type: 'Message', id: 'LIST' },
+      'Group'
+    ],
+  }),
 });

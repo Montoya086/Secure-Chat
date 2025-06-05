@@ -4,8 +4,12 @@ import {
   useLazyGetConversationQuery,
   useSendMessageMutation,
   useGetUserPublicKeyQuery,
+  useGetGroupsQuery,
+  useLazyGetGroupMessagesQuery,
+  useSendGroupMessageMutation,
+  useCreateGroupMutation,
 } from "../store/api/baseApi-slice";
-import { User, Message } from "../store/api/types";
+import { User, Message, Group, GroupMessage } from "../store/api/types";
 import Cookies from 'js-cookie';
 import { TOKEN_COOKIE_NAME } from '../utils/constants';
 
@@ -19,9 +23,11 @@ interface Conversation {
 const useChat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserData, setCurrentUserData] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
 
@@ -33,13 +39,34 @@ const useChat = () => {
     refetch: refetchUsers 
   } = useGetUsersQuery();
 
+  const { 
+    data: groupsResponse,
+    isLoading: isGroupsLoading, 
+    error: groupsError,
+    refetch: refetchGroups 
+  } = useGetGroupsQuery();
+
+  const groups = groupsResponse?.groups || [];
+
   const [getConversation, { 
     isLoading: isMessagesLoading 
   }] = useLazyGetConversationQuery();
 
+  const [getGroupMessages, { 
+    isLoading: isGroupMessagesLoading 
+  }] = useLazyGetGroupMessagesQuery();
+
   const [sendMessageMutation, { 
     isLoading: isSendingMessage 
   }] = useSendMessageMutation();
+
+  const [sendGroupMessageMutation, { 
+    isLoading: isSendingGroupMessage 
+  }] = useSendGroupMessageMutation();
+
+  const [createGroupMutation, { 
+    isLoading: isCreatingGroup 
+  }] = useCreateGroupMutation();
 
   // Inicializar usuario actual desde el token y hacer match con la lista de usuarios
   const initializeCurrentUser = useCallback(() => {
@@ -99,7 +126,7 @@ const useChat = () => {
     console.log('💬 Conversations initialized:', convs.length);
   }, [currentUserId]);
 
-  // Cargar mensajes de una conversación
+  // Cargar mensajes de una conversación directa
   const loadConversation = useCallback(async (userId: string) => {
     if (!currentUserId) {
       console.error('❌ No current user ID available');
@@ -121,13 +148,37 @@ const useChat = () => {
     }
   }, [currentUserId, getConversation]);
 
+  // Cargar mensajes de un grupo
+  const loadGroupConversation = useCallback(async (groupId: string) => {
+    try {
+      console.log('👥 Loading group messages for:', groupId);
+      const result = await getGroupMessages(groupId).unwrap();
+
+      setGroupMessages(result.messages || []);
+      console.log('👥 Group messages loaded:', result.message_count);
+    } catch (error) {
+      console.error('❌ Error loading group messages:', error);
+      setGroupMessages([]);
+    }
+  }, [getGroupMessages]);
+
   // Seleccionar usuario y cargar conversación
   const selectUser = useCallback(async (user: User) => {
     setSelectedUser(user);
+    setSelectedGroup(null); // Deseleccionar grupo
+    setGroupMessages([]); // Limpiar mensajes de grupo
     await loadConversation(user.id);
   }, [loadConversation]);
 
-  // Enviar mensaje
+  // Seleccionar grupo y cargar conversación
+  const selectGroup = useCallback(async (group: Group) => {
+    setSelectedGroup(group);
+    setSelectedUser(null); // Deseleccionar usuario
+    setMessages([]); // Limpiar mensajes directos
+    await loadGroupConversation(group.id);
+  }, [loadGroupConversation]);
+
+  // Enviar mensaje directo
   const sendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedUser || !currentUserId) {
       return false;
@@ -162,6 +213,62 @@ const useChat = () => {
     }
   }, [newMessage, selectedUser, currentUserId, sendMessageMutation, loadConversation]);
 
+  // Enviar mensaje a grupo
+  const sendGroupMessage = useCallback(async () => {
+    if (!newMessage.trim() || !selectedGroup) {
+      return false;
+    }
+
+    setSendSuccess(false);
+    
+    try {
+      console.log('👥 Sending group message to:', selectedGroup.id);
+      const result = await sendGroupMessageMutation({
+        groupId: selectedGroup.id,
+        data: { message: newMessage }
+      }).unwrap();
+
+      console.log('✅ Group message sent:', result.status);
+      
+      // Limpiar input
+      setNewMessage('');
+      
+      // Recargar mensajes del grupo
+      await loadGroupConversation(selectedGroup.id);
+      
+      // Refrescar la lista de grupos para actualizar el último mensaje
+      refetchGroups();
+      
+      setSendSuccess(true);
+      return true;
+    } catch (error) {
+      console.error('❌ Error sending group message:', error);
+      setSendSuccess(false);
+      return false;
+    }
+  }, [newMessage, selectedGroup, sendGroupMessageMutation, loadGroupConversation, refetchGroups]);
+
+  // Crear grupo
+  const createGroup = useCallback(async (groupName: string, memberIds: string[]) => {
+    try {
+      console.log('👥 Creating group:', groupName, 'with members:', memberIds);
+      const result = await createGroupMutation({
+        name: groupName,
+        member_ids: memberIds
+      }).unwrap();
+
+      console.log('✅ Group created:', result.status);
+      
+      // Refrescar la lista de grupos
+      await refetchGroups();
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Error creating group:', error);
+      throw error;
+    }
+  }, [createGroupMutation, refetchGroups]);
+
   // Actualizar último mensaje en conversación
   const updateConversationLastMessage = useCallback((userId: string, message: string) => {
     setConversations(prev => 
@@ -175,13 +282,15 @@ const useChat = () => {
 
   // Refrescar datos
   const refreshData = useCallback(async () => {
-    await refetchUsers();
-  }, [refetchUsers]);
+    await Promise.all([refetchUsers(), refetchGroups()]);
+  }, [refetchUsers, refetchGroups]);
 
   // Reset estados
   const resetChatState = useCallback(() => {
     setSelectedUser(null);
+    setSelectedGroup(null);
     setMessages([]);
+    setGroupMessages([]);
     setNewMessage('');
     setSendSuccess(false);
   }, []);
@@ -189,32 +298,44 @@ const useChat = () => {
   return {
     // Estados
     users,
+    groups,
     conversations,
     selectedUser,
+    selectedGroup,
     currentUserId,
     currentUserData,
     messages,
+    groupMessages,
     newMessage,
     sendSuccess,
 
     // Estados de carga
     isUsersLoading,
+    isGroupsLoading,
     isMessagesLoading,
+    isGroupMessagesLoading,
     isSendingMessage,
+    isSendingGroupMessage,
+    isCreatingGroup,
 
     // Errores
     usersError,
+    groupsError,
 
     // Métodos
     initializeCurrentUser,
     getCurrentUserInfo,
     initializeConversations,
     selectUser,
+    selectGroup,
     sendMessage,
+    sendGroupMessage,
+    createGroup,
     setNewMessage,
     refreshData,
     resetChatState,
     loadConversation,
+    loadGroupConversation,
     updateConversationLastMessage,
   };
 };

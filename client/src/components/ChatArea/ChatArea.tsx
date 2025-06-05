@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { User, Message } from '../../store/api/types';
+import { User, Message, Group, GroupMessage } from '../../store/api/types';
 
 // Paleta de colores
 const colors = {
@@ -13,31 +13,41 @@ const colors = {
 
 interface ChatAreaProps {
   selectedUser: User | null;
+  selectedGroup: Group | null;
   currentUserId: string;
   messages: Message[];
+  groupMessages: GroupMessage[];
   newMessage: string;
   isMessagesLoading: boolean;
+  isGroupMessagesLoading: boolean;
   isSendingMessage: boolean;
+  isSendingGroupMessage: boolean;
   onMessageChange: (message: string) => void;
   onSendMessage: () => Promise<boolean>;
+  onSendGroupMessage: () => Promise<boolean>;
 }
 
 const ChatArea: React.FC<ChatAreaProps> = ({
   selectedUser,
+  selectedGroup,
   currentUserId,
   messages,
+  groupMessages,
   newMessage,
   isMessagesLoading,
+  isGroupMessagesLoading,
   isSendingMessage,
+  isSendingGroupMessage,
   onMessageChange,
-  onSendMessage
+  onSendMessage,
+  onSendGroupMessage
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll al final de los mensajes
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, groupMessages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -73,9 +83,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
 
   const handleSendMessage = async (e?: React.KeyboardEvent) => {
     if (e && e.key !== 'Enter') return;
-    if (!newMessage.trim() || !selectedUser || isSendingMessage) return;
+    if (!newMessage.trim() || (!selectedUser && !selectedGroup)) return;
     
-    await onSendMessage();
+    if (selectedGroup) {
+      await onSendGroupMessage();
+    } else if (selectedUser) {
+      await onSendMessage();
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -85,8 +99,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
-  // Si no hay usuario seleccionado
-  if (!selectedUser) {
+  const isLoading = isMessagesLoading || isGroupMessagesLoading;
+  const isSending = isSendingMessage || isSendingGroupMessage;
+  const currentMessages = selectedGroup ? groupMessages : messages;
+
+  // Si no hay usuario ni grupo seleccionado
+  if (!selectedUser && !selectedGroup) {
     return (
       <div style={{
         flex: 1,
@@ -97,7 +115,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         backgroundColor: colors.white,
         color: '#666',
         fontSize: '18px',
-        paddingLeft: '60px' // Agregamos margen izquierdo
+        paddingLeft: '60px'
       }}>
         <div style={{
           fontSize: '64px',
@@ -118,11 +136,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           textAlign: 'center',
           lineHeight: '1.5'
         }}>
-          Elige un contacto de la lista para comenzar a chatear
+          Elige un contacto o grupo de la lista para comenzar a chatear
         </p>
       </div>
     );
   }
+
+  const chatTitle = selectedGroup ? selectedGroup.name : (selectedUser?.name || selectedUser?.email);
+  const chatSubtitle = selectedGroup 
+    ? `${selectedGroup.member_count} miembro${selectedGroup.member_count !== 1 ? 's' : ''}`
+    : selectedUser?.email;
 
   return (
     <div style={{
@@ -144,7 +167,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           width: '40px',
           height: '40px',
           borderRadius: '50%',
-          backgroundColor: colors.purple,
+          backgroundColor: selectedGroup ? colors.accent : colors.purple,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -152,16 +175,29 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           fontWeight: 'bold',
           marginRight: '12px'
         }}>
-          {getInitials(selectedUser.name || selectedUser.email)}
+          {getInitials(chatTitle || '')}
         </div>
         <div>
           <h3 style={{
             margin: 0,
             fontSize: '18px',
-            color: colors.dark
+            color: colors.dark,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}>
-            {selectedUser.name || selectedUser.email}
+            {selectedGroup && <span>👥</span>}
+            {chatTitle}
           </h3>
+          {chatSubtitle && (
+            <p style={{
+              margin: 0,
+              fontSize: '12px',
+              color: '#666'
+            }}>
+              {chatSubtitle}
+            </p>
+          )}
         </div>
       </div>
 
@@ -172,7 +208,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         padding: '20px',
         backgroundColor: '#f8f9fa'
       }}>
-        {isMessagesLoading ? (
+        {isLoading ? (
           <div style={{
             display: 'flex',
             justifyContent: 'center',
@@ -182,7 +218,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           }}>
             Cargando mensajes...
           </div>
-        ) : messages.length === 0 ? (
+        ) : currentMessages.length === 0 ? (
           <div style={{
             display: 'flex',
             justifyContent: 'center',
@@ -195,10 +231,14 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           </div>
         ) : (
           <>
-            {messages.map((message, index) => {
+            {currentMessages.map((message, index) => {
               const isOwn = message.sender_id === currentUserId;
               const showDate = index === 0 || 
-                formatDate(message.timestamp) !== formatDate(messages[index - 1].timestamp);
+                formatDate(message.timestamp) !== formatDate(currentMessages[index - 1].timestamp);
+              
+              // Para mensajes de grupo, mostrar el nombre del sender
+              const isGroupMessage = 'sender_name' in message;
+              const senderName = isGroupMessage ? (message as GroupMessage).sender_name : null;
 
               return (
                 <div key={message.id}>
@@ -222,44 +262,62 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                   }}>
                     <div style={{
                       maxWidth: '70%',
-                      padding: '12px 16px',
-                      borderRadius: '18px',
-                      backgroundColor: isOwn ? colors.accent : colors.white,
-                      color: isOwn ? colors.white : colors.dark,
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                      wordWrap: 'break-word'
+                      display: 'flex',
+                      flexDirection: 'column'
                     }}>
-                      <p style={{
-                        margin: 0,
-                        fontSize: '14px',
-                        lineHeight: '1.4'
-                      }}>
-                        {message.content}
-                      </p>
-                      <div style={{
-                        fontSize: '11px',
-                        marginTop: '4px',
-                        opacity: 0.7,
-                        textAlign: 'right'
-                      }}>
-                        {formatTime(message.timestamp)}
-                        {message.security_info?.encrypted && (
-                          <span style={{ marginLeft: '4px' }} title="Mensaje encriptado">🔒</span>
-                        )}
-                        {message.security_info?.is_signed && (
-                          <span style={{ marginLeft: '4px' }} title="Mensaje firmado">✓</span>
-                        )}
-                      </div>
-                      {message.error && (
+                      {/* Nombre del sender (solo para grupos y mensajes que no son propios) */}
+                      {selectedGroup && !isOwn && senderName && (
                         <div style={{
-                          fontSize: '11px',
-                          color: '#ff4444',
-                          marginTop: '2px',
-                          fontStyle: 'italic'
+                          fontSize: '12px',
+                          color: colors.purple,
+                          fontWeight: 'bold',
+                          marginBottom: '4px',
+                          marginLeft: '16px'
                         }}>
-                          Error: {message.error}
+                          {senderName}
                         </div>
                       )}
+                      
+                      <div style={{
+                        padding: '12px 16px',
+                        borderRadius: '18px',
+                        backgroundColor: isOwn ? colors.accent : colors.white,
+                        color: isOwn ? colors.white : colors.dark,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                        wordWrap: 'break-word'
+                      }}>
+                        <p style={{
+                          margin: 0,
+                          fontSize: '14px',
+                          lineHeight: '1.4'
+                        }}>
+                          {message.content}
+                        </p>
+                        <div style={{
+                          fontSize: '11px',
+                          marginTop: '4px',
+                          opacity: 0.7,
+                          textAlign: 'right'
+                        }}>
+                          {formatTime(message.timestamp)}
+                          {message.security_info?.encrypted && (
+                            <span style={{ marginLeft: '4px' }} title="Mensaje encriptado">🔒</span>
+                          )}
+                          {message.security_info?.is_signed && (
+                            <span style={{ marginLeft: '4px' }} title="Mensaje firmado">✓</span>
+                          )}
+                        </div>
+                        {message.error && (
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#ff4444',
+                            marginTop: '2px',
+                            fontStyle: 'italic'
+                          }}>
+                            Error: {message.error}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -284,8 +342,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
           value={newMessage}
           onChange={(e) => onMessageChange(e.target.value)}
           onKeyPress={handleKeyPress}
-          placeholder="Escribe un mensaje..."
-          disabled={isSendingMessage}
+          placeholder={selectedGroup ? `Mensaje al grupo ${selectedGroup.name}...` : "Escribe un mensaje..."}
+          disabled={isSending}
           style={{
             flex: 1,
             padding: '12px 16px',
@@ -294,12 +352,12 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             outline: 'none',
             fontSize: '14px',
             backgroundColor: colors.white,
-            opacity: isSendingMessage ? 0.7 : 1
+            opacity: isSending ? 0.7 : 1
           }}
         />
         <button
           onClick={() => handleSendMessage()}
-          disabled={!newMessage.trim() || isSendingMessage}
+          disabled={!newMessage.trim() || isSending}
           style={{
             width: '45px',
             height: '45px',
@@ -307,16 +365,16 @@ const ChatArea: React.FC<ChatAreaProps> = ({
             border: 'none',
             backgroundColor: colors.accent,
             color: colors.white,
-            cursor: newMessage.trim() && !isSendingMessage ? 'pointer' : 'not-allowed',
+            cursor: newMessage.trim() && !isSending ? 'pointer' : 'not-allowed',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: newMessage.trim() && !isSendingMessage ? 1 : 0.5,
+            opacity: newMessage.trim() && !isSending ? 1 : 0.5,
             fontSize: '18px',
             transition: 'opacity 0.2s'
           }}
         >
-          {isSendingMessage ? '⏳' : '➤'}
+          {isSending ? '⏳' : '➤'}
         </button>
       </div>
     </div>

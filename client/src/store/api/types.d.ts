@@ -27,6 +27,8 @@ export interface OAuthLoginRequest {
 export interface RegisterRequest {
 	email: string;
 	password: string;
+	givenName: string;
+	familyName: string;
 }
 
 export interface FileUploadResponse {
@@ -62,7 +64,7 @@ export interface VerifyMfaResponse {
   valid: boolean;
 }
 
-// ========== NUEVOS TIPOS PARA CHAT ==========
+// ========== TIPOS PARA CHAT DIRECTO ==========
 
 export interface User {
 	id: string;
@@ -81,6 +83,7 @@ export interface Message {
 		is_signed: boolean;
 		signature_valid: boolean;
 		encrypted: boolean;
+		system?: string;
 	};
 	error?: string;
 }
@@ -106,7 +109,113 @@ export interface SendMessageResponse {
 		encrypted: boolean;
 		signed: boolean;
 		algorithm: string;
+		flow?: string;
 	};
+}
+
+export interface UserPublicKeyResponse {
+	user_id: string;
+	email: string;
+	name: string;
+	public_key: string;
+	signing_public_key?: string;
+}
+
+// ========== TIPOS PARA GRUPOS ==========
+
+export interface Group {
+	id: string;
+	name: string;
+	admin_id: string;
+	is_admin: boolean;
+	member_count: number;
+	members: GroupMember[];
+	last_message?: string;
+	last_message_time?: string;
+	created_at: string;
+}
+
+export interface GroupMember {
+	id: string;
+	name: string;
+	email: string;
+}
+
+export interface CreateGroupRequest {
+	name: string;
+	member_ids?: string[];
+}
+
+export interface CreateGroupResponse {
+	status: string;
+	group_id: string;
+	group_name?: string;
+	admin_id: string;
+	members_added?: GroupMember[];
+	total_members?: number;
+	security_info: {
+		encryption: string;
+		key_management: string;
+	};
+}
+
+export interface AddGroupMemberRequest {
+	user_id: string;
+}
+
+export interface AddGroupMemberResponse {
+	status: string;
+	group_id: string;
+	new_member_id: string;
+	new_member_name?: string;
+	new_member_email?: string;
+}
+
+export interface GroupMessage {
+	id: string;
+	sender_id: string;
+	sender_name: string;
+	group_id: string;
+	content: string;
+	timestamp: string;
+	security_info?: {
+		is_signed: boolean;
+		signature_valid: boolean;
+		encrypted: boolean;
+		system: string;
+	};
+	error?: string;
+}
+
+export interface GroupConversationResponse {
+	group_id: string;
+	group_name: string;
+	message_count: number;
+	current_key_version: number;
+	messages: GroupMessage[];
+}
+
+export interface SendGroupMessageRequest {
+	message: string;
+}
+
+export interface SendGroupMessageResponse {
+	status: string;
+	message_id: string;
+	group_id: string;
+	group_name: string;
+	security_features: {
+		encrypted: boolean;
+		signed: boolean;
+		algorithm: string;
+		flow: string;
+		key_version: number;
+	};
+}
+
+export interface GetGroupsResponse {
+	groups: Group[];
+	total_groups: number;
 }
 
 export interface CurrentUserResponse {

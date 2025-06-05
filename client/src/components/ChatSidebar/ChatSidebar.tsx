@@ -1,5 +1,5 @@
 import React from 'react';
-import { User } from '../../store/api/types';
+import { User, Group } from '../../store/api/types';
 import Cookies from 'js-cookie';
 import { TOKEN_COOKIE_NAME } from '../../utils/constants';
 
@@ -22,24 +22,32 @@ interface Conversation {
 
 interface ChatSidebarProps {
   conversations: Conversation[];
+  groups: Group[];
   selectedUser: User | null;
+  selectedGroup: Group | null;
   currentUserInfo: {
     id: string;
     email: string;
     name?: string;
   } | null;
   isLoading: boolean;
+  isGroupsLoading: boolean;
   onSelectUser: (user: User) => void;
+  onSelectGroup: (group: Group) => void;
   onCreateGroup: () => void;
   onLogout: () => void;
 }
 
 const ChatSidebar: React.FC<ChatSidebarProps> = ({
   conversations,
+  groups,
   selectedUser,
+  selectedGroup,
   currentUserInfo,
   isLoading,
+  isGroupsLoading,
   onSelectUser,
+  onSelectGroup,
   onCreateGroup,
   onLogout
 }) => {
@@ -82,7 +90,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   const userInfo = getCurrentUserInfo();
 
-  if (isLoading) {
+  if (isLoading && isGroupsLoading) {
     return (
       <div style={{
         width: '350px',
@@ -208,135 +216,282 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         </div>
       </div>
 
-      {/* Título de conversaciones */}
-      <div style={{
-        padding: '15px 20px 10px 20px',
-        borderBottom: `1px solid #f0f0f0`
-      }}>
-        <h4 style={{
-          margin: 0,
-          fontSize: '14px',
-          color: colors.dark,
-          fontWeight: 'bold'
-        }}>
-          Conversaciones ({conversations.length})
-        </h4>
-      </div>
-
-      {/* Lista de conversaciones */}
+      {/* Contenido scrolleable */}
       <div style={{
         flex: 1,
         overflowY: 'auto'
       }}>
-        {conversations.length === 0 ? (
+        {/* Sección de Grupos */}
+        <div style={{
+          borderBottom: `1px solid #f0f0f0`
+        }}>
           <div style={{
-            padding: '40px 20px',
-            textAlign: 'center',
-            color: '#666'
+            padding: '15px 20px 10px 20px',
+            backgroundColor: '#f8f9fa'
           }}>
-            <div style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.3 }}>
-              👥
-            </div>
-            <p style={{ margin: 0, fontSize: '14px' }}>
-              No hay usuarios disponibles
-            </p>
+            <h4 style={{
+              margin: 0,
+              fontSize: '14px',
+              color: colors.dark,
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span>👥</span>
+              Grupos ({groups.length})
+            </h4>
           </div>
-        ) : (
-          conversations.map((conversation) => (
-            <div
-              key={conversation.user.id}
-              onClick={() => onSelectUser(conversation.user)}
-              style={{
-                padding: '15px 20px',
-                borderBottom: `1px solid #f0f0f0`,
-                cursor: 'pointer',
-                backgroundColor: selectedUser?.id === conversation.user.id ? colors.secondary : 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                transition: 'background-color 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                if (selectedUser?.id !== conversation.user.id) {
-                  e.currentTarget.style.backgroundColor = '#f5f5f5';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (selectedUser?.id !== conversation.user.id) {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
-            >
-              {/* Avatar */}
-              <div style={{
-                width: '50px',
-                height: '50px',
-                borderRadius: '50%',
-                backgroundColor: colors.purple,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: colors.white,
-                fontWeight: 'bold',
-                marginRight: '12px',
-                fontSize: '18px'
-              }}>
-                {getInitials(conversation.user.name || conversation.user.email)}
-              </div>
 
-              {/* Información del usuario */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{
+          {isGroupsLoading ? (
+            <div style={{
+              padding: '20px',
+              textAlign: 'center',
+              color: colors.primary,
+              fontSize: '14px'
+            }}>
+              Cargando grupos...
+            </div>
+          ) : groups.length === 0 ? (
+            <div style={{
+              padding: '20px',
+              textAlign: 'center',
+              color: '#666',
+              fontSize: '12px'
+            }}>
+              No tienes grupos aún
+            </div>
+          ) : (
+            groups.map((group) => (
+              <div
+                key={group.id}
+                onClick={() => onSelectGroup(group)}
+                style={{
+                  padding: '12px 20px',
+                  cursor: 'pointer',
+                  backgroundColor: selectedGroup?.id === group.id ? colors.secondary : 'transparent',
                   display: 'flex',
-                  justifyContent: 'space-between',
                   alignItems: 'center',
-                  marginBottom: '4px'
-                }}>
-                  <h4 style={{
-                    margin: 0,
-                    fontSize: '16px',
-                    fontWeight: 'bold',
-                    color: colors.dark,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    flex: 1
-                  }}>
-                    {conversation.user.name || conversation.user.email}
-                  </h4>
-                </div>
-                
-                <p style={{
-                  margin: 0,
-                  fontSize: '14px',
-                  color: '#666',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {conversation.lastMessage || 'Inicia una conversación...'}
-                </p>
-              </div>
-
-              {/* Indicador de mensajes no leídos */}
-              {conversation.unreadCount && conversation.unreadCount > 0 && (
+                  transition: 'background-color 0.2s',
+                  borderBottom: '1px solid #f0f0f0'
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedGroup?.id !== group.id) {
+                    e.currentTarget.style.backgroundColor = '#f5f5f5';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedGroup?.id !== group.id) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                {/* Avatar del grupo */}
                 <div style={{
-                  width: '20px',
-                  height: '20px',
+                  width: '45px',
+                  height: '45px',
                   borderRadius: '50%',
                   backgroundColor: colors.accent,
-                  color: colors.white,
-                  fontSize: '12px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  marginLeft: '8px'
+                  color: colors.white,
+                  fontWeight: 'bold',
+                  marginRight: '12px',
+                  fontSize: '16px'
                 }}>
-                  {conversation.unreadCount}
+                  {getInitials(group.name)}
                 </div>
-              )}
+
+                {/* Información del grupo */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '4px'
+                  }}>
+                    <h4 style={{
+                      margin: 0,
+                      fontSize: '15px',
+                      fontWeight: 'bold',
+                      color: colors.dark,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flex: 1
+                    }}>
+                      {group.name}
+                      {group.is_admin && (
+                        <span style={{
+                          marginLeft: '6px',
+                          fontSize: '12px',
+                          backgroundColor: colors.purple,
+                          color: colors.white,
+                          padding: '2px 6px',
+                          borderRadius: '10px'
+                        }}>
+                          Admin
+                        </span>
+                      )}
+                    </h4>
+                  </div>
+                  
+                  <p style={{
+                    margin: 0,
+                    fontSize: '12px',
+                    color: '#666',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {group.member_count} miembro{group.member_count !== 1 ? 's' : ''} • {group.last_message || 'Sin mensajes'}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Sección de Conversaciones Directas */}
+        <div>
+          <div style={{
+            padding: '15px 20px 10px 20px',
+            backgroundColor: '#f8f9fa'
+          }}>
+            <h4 style={{
+              margin: 0,
+              fontSize: '14px',
+              color: colors.dark,
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span>💬</span>
+              Conversaciones ({conversations.length})
+            </h4>
+          </div>
+
+          {isLoading ? (
+            <div style={{
+              padding: '20px',
+              textAlign: 'center',
+              color: colors.primary,
+              fontSize: '14px'
+            }}>
+              Cargando conversaciones...
             </div>
-          ))
-        )}
+          ) : conversations.length === 0 ? (
+            <div style={{
+              padding: '40px 20px',
+              textAlign: 'center',
+              color: '#666'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '15px', opacity: 0.3 }}>
+                👥
+              </div>
+              <p style={{ margin: 0, fontSize: '14px' }}>
+                No hay usuarios disponibles
+              </p>
+            </div>
+          ) : (
+            conversations.map((conversation) => (
+              <div
+                key={conversation.user.id}
+                onClick={() => onSelectUser(conversation.user)}
+                style={{
+                  padding: '15px 20px',
+                  borderBottom: `1px solid #f0f0f0`,
+                  cursor: 'pointer',
+                  backgroundColor: selectedUser?.id === conversation.user.id ? colors.secondary : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedUser?.id !== conversation.user.id) {
+                    e.currentTarget.style.backgroundColor = '#f5f5f5';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedUser?.id !== conversation.user.id) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                {/* Avatar */}
+                <div style={{
+                  width: '50px',
+                  height: '50px',
+                  borderRadius: '50%',
+                  backgroundColor: colors.purple,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: colors.white,
+                  fontWeight: 'bold',
+                  marginRight: '12px',
+                  fontSize: '18px'
+                }}>
+                  {getInitials(conversation.user.name || conversation.user.email)}
+                </div>
+
+                {/* Información del usuario */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: '4px'
+                  }}>
+                    <h4 style={{
+                      margin: 0,
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      color: colors.dark,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      flex: 1
+                    }}>
+                      {conversation.user.name || conversation.user.email}
+                    </h4>
+                  </div>
+                  
+                  <p style={{
+                    margin: 0,
+                    fontSize: '14px',
+                    color: '#666',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {conversation.lastMessage || 'Inicia una conversación...'}
+                  </p>
+                </div>
+
+                {/* Indicador de mensajes no leídos */}
+                {conversation.unreadCount && conversation.unreadCount > 0 && (
+                  <div style={{
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    backgroundColor: colors.accent,
+                    color: colors.white,
+                    fontSize: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginLeft: '8px'
+                  }}>
+                    {conversation.unreadCount}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

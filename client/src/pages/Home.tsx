@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { setAppState } from '../store/slices/appState-slice';
 import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../utils/constants';
@@ -6,6 +6,7 @@ import Cookies from 'js-cookie';
 import useChat from '../hooks/useChat';
 import ChatSidebar from '../components/ChatSidebar/ChatSidebar';
 import ChatArea from '../components/ChatArea/ChatArea';
+import CreateGroupModal from '../components/CreateGroupModal/CreateGroupModal';
 
 // Paleta de colores
 const colors = {
@@ -26,25 +27,37 @@ interface Conversation {
 
 const Home = () => {
   const dispatch = useDispatch();
+  const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
   
   const {
     users,
+    groups,
     conversations,
     selectedUser,
+    selectedGroup,
     currentUserId,
     currentUserData,
     messages,
+    groupMessages,
     newMessage,
     sendSuccess,
     isUsersLoading,
+    isGroupsLoading,
     isMessagesLoading,
+    isGroupMessagesLoading,
     isSendingMessage,
+    isSendingGroupMessage,
+    isCreatingGroup,
     usersError,
+    groupsError,
     initializeCurrentUser,
     getCurrentUserInfo,
     initializeConversations,
     selectUser,
+    selectGroup,
     sendMessage,
+    sendGroupMessage,
+    createGroup,
     setNewMessage,
     refreshData
   } = useChat();
@@ -71,8 +84,6 @@ const Home = () => {
     }
   }, [users, currentUserId, initializeConversations]);
 
-
-
   const handleLogout = () => {
     dispatch(setAppState('NOT_LOGGED_IN'));
     Cookies.remove(TOKEN_COOKIE_NAME);
@@ -80,17 +91,43 @@ const Home = () => {
   };
 
   const handleCreateGroup = () => {
-    alert('Función de crear grupo próximamente');
-    // Aquí puedes implementar la lógica para crear grupos
-    // O navegar a una página específica para crear grupos
+    setIsCreateGroupModalOpen(true);
+  };
+
+  const handleCloseCreateGroupModal = () => {
+    setIsCreateGroupModalOpen(false);
+  };
+
+  const handleCreateGroupSubmit = async (groupName: string, selectedUsers: string[]) => {
+    try {
+      await createGroup(groupName, selectedUsers);
+      console.log('✅ Group created successfully');
+    } catch (error) {
+      console.error('❌ Error creating group:', error);
+      throw error; // Re-throw para que el modal pueda manejar el error
+    }
   };
 
   const handleSendMessage = async (): Promise<boolean> => {
-    if (!newMessage.trim() || !selectedUser || isSendingMessage) {
+    if (!newMessage.trim() || (!selectedUser && !selectedGroup)) {
       return false;
     }
     
-    const success = await sendMessage();
+    if (selectedGroup) {
+      return await sendGroupMessage();
+    } else if (selectedUser) {
+      return await sendMessage();
+    }
+    
+    return false;
+  };
+
+  const handleSendGroupMessage = async (): Promise<boolean> => {
+    if (!newMessage.trim() || !selectedGroup || isSendingGroupMessage) {
+      return false;
+    }
+    
+    const success = await sendGroupMessage();
     return success;
   };
 
@@ -111,8 +148,9 @@ const Home = () => {
           fontSize: '18px',
           textAlign: 'center'
         }}>
-          <h3>Error al cargar los usuarios</h3>
+          <h3>Error al cargar los datos</h3>
           <p>No se pudieron cargar las conversaciones.</p>
+          {groupsError && <p>Error al cargar grupos.</p>}
         </div>
         <button
           onClick={refreshData}
@@ -139,7 +177,7 @@ const Home = () => {
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Header fijo (opcional) */}
+      {/* Header fijo */}
       <div style={{
         height: '60px',
         backgroundColor: colors.primary,
@@ -169,10 +207,14 @@ const Home = () => {
         {/* Sidebar izquierdo */}
         <ChatSidebar
           conversations={conversations}
+          groups={groups}
           selectedUser={selectedUser}
+          selectedGroup={selectedGroup}
           currentUserInfo={getCurrentUserInfo()}
           isLoading={isUsersLoading}
+          isGroupsLoading={isGroupsLoading}
           onSelectUser={selectUser}
+          onSelectGroup={selectGroup}
           onCreateGroup={handleCreateGroup}
           onLogout={handleLogout}
         />
@@ -180,15 +222,30 @@ const Home = () => {
         {/* Área principal del chat */}
         <ChatArea
           selectedUser={selectedUser}
+          selectedGroup={selectedGroup}
           currentUserId={currentUserId}
           messages={messages}
+          groupMessages={groupMessages}
           newMessage={newMessage}
           isMessagesLoading={isMessagesLoading}
+          isGroupMessagesLoading={isGroupMessagesLoading}
           isSendingMessage={isSendingMessage}
+          isSendingGroupMessage={isSendingGroupMessage}
           onMessageChange={setNewMessage}
           onSendMessage={handleSendMessage}
+          onSendGroupMessage={handleSendGroupMessage}
         />
       </div>
+
+      {/* Modal para crear grupo */}
+      <CreateGroupModal
+        isOpen={isCreateGroupModalOpen}
+        users={users}
+        currentUserId={currentUserId}
+        onClose={handleCloseCreateGroupModal}
+        onCreateGroup={handleCreateGroupSubmit}
+        isCreating={isCreatingGroup}
+      />
     </div>
   );
 };
