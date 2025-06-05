@@ -1,8 +1,29 @@
 from blockchain.block import Block
+from config.database import get_db
 
 class Blockchain:
     def __init__(self):
         self.chain = [self.create_genesis_block()]  # Inicia la cadena con el bloque génesis
+
+    def load_chain_from_db(self):
+        """
+        Carga todos los bloques desde la base de datos MongoDB en orden.
+        Si no hay bloques, crea el bloque génesis.
+        """
+        db = get_db()
+        blocks_collection = db["blocks"]
+        bloques = list(blocks_collection.find().sort("index", 1))  # Asegura orden
+
+        if not bloques:
+            genesis = self.create_genesis_block()
+            genesis.save_to_db()
+            return [genesis]
+        else:
+            return [Block(
+                index=block["index"],
+                data=block["data"],
+                previous_hash=block["previous_hash"]
+            ) for block in bloques]
 
     def create_genesis_block(self):
         """
@@ -25,6 +46,7 @@ class Blockchain:
         prev_block = self.get_latest_block()
         new_block = Block(len(self.chain), data, prev_block.hash)
         self.chain.append(new_block)
+        new_block.save_to_db()
 
     def is_chain_valid(self):
         """
