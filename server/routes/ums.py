@@ -42,99 +42,76 @@ def generate_tokens(user_id, provider = 'local', mfa_enabled = False):
     
     return access_token, refresh_token
 
-# --- AUXILIARY FUNCTIONS ---
-def create_user(db, email, givenName, familyName, password=None, providers=None, picture=None):
-    """
-    Create a new user in the database.
-    Args:
-        db: The database object.
-        email: The email of the user.
-        givenName: The given name of the user.
-        familyName: The family name of the user.
-        password: The password of the user.
-        providers: The providers of the user.
-        picture: The picture of the user.
-    """
-    # generate key pair for encryption
-    private_key, public_key = generate_key_pair()
-    private_key_pem = get_private_key_pem(private_key).decode('utf-8')
-    public_key_pem = get_public_key_pem(public_key).decode('utf-8')
-    # create user
-    user = {
-        'email': email,
-        'givenName': givenName,
-        'familyName': familyName,
-        'providers': providers or ['local'],
-        'private_key': private_key_pem,
-        'public_key': public_key_pem,
-        'created_at': datetime.utcnow(),
-        'mfa_secret': None,
-        'mfa_enabled': False
-    }
-    if password:
-        user['password'] = generate_password_hash(password)
-    if picture:
-        user['picture'] = picture
-    return db.users.insert_one(user)
-
-def token_response(user_id, mfa_enabled, provider='local', status_code=200, message=None):
-    """
-    Generate tokens for a user.
-    Args:
-        user_id: The ID of the user.
-        mfa_enabled: Whether the user has MFA enabled.
-        provider: The provider of the user.
-        status_code: The status code of the response.
-        message: The message of the response.
-    """
-    access_token, refresh_token = generate_tokens(user_id, provider, mfa_enabled)
-    response = jsonify({
-        'access_token': access_token,
-        'access_token_expiration_time': int(current_app.config['ACCESS_TOKEN_EXPIRATION_TIME']) * 60 * 1000,
-        'refresh_token': refresh_token,
-        'refresh_token_expiration_time': int(current_app.config['REFRESH_TOKEN_EXPIRATION_TIME']) * 24 * 60 * 60 * 1000
-    })
-    response.status_code = status_code
-    if message:
-        response.json['message'] = message
-    return response
-
 @auth_bp.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
     db = get_db()
-    existing_user = db.users.find_one({'email': data['email']})
+    
+    # Generate RSA key pair for the user
+    private_key, public_key = generate_key_pair()
+    private_key_pem = get_private_key_pem(private_key).decode('utf-8')
+    public_key_pem = get_public_key_pem(public_key).decode('utf-8')
+
     mfa_enabled = False
 
+    # check if the user is already registered
+    existing_user = db.users.find_one({'email': data['email']})
     if existing_user:
+        # if the user exists but doesn't have a password, set it
         if 'password' not in existing_user:
             db.users.update_one({'email': data['email']}, {'$set': {'password': generate_password_hash(data['password'])}})
+            # add the provider to the user
             db.users.update_one({'email': data['email']}, {'$push': {'providers': 'local'}})
             userId = existing_user['_id']
             mfa_enabled = existing_user['mfa_enabled']
         else:
             return jsonify({'error': 'Email already exists'}), 400
     else:
-        result = create_user(
-            db,
-            email=data['email'],
-            givenName=data['givenName'],
-            familyName=data['familyName'],
-            password=data['password']
-        )
+        # if the user is not registered, create a new user
+        user = {
+            'email': data['email'],
+            'givenName': data['givenName'],
+            'familyName': data['familyName'],
+            'providers': ['local'],
+            'password': generate_password_hash(data['password']),
+            'private_key': private_key_pem,
+            'public_key': public_key_pem,
+            'created_at': datetime.utcnow(),
+            'mfa_secret': None,
+            'mfa_enabled': False
+        }
+    
+        result = db.users.insert_one(user)
         userId = result.inserted_id
-
-    return token_response(userId, mfa_enabled, status_code=201, message='User registered successfully')
+    
+    access_token, refresh_token = generate_tokens(userId, mfa_enabled = mfa_enabled)
+    
+    return jsonify({
+        'message': 'User registered successfully',
+        'access_token': access_token,
+        'access_token_expiration_time': int(current_app.config['ACCESS_TOKEN_EXPIRATION_TIME']) * 60 * 1000,
+        'refresh_token': refresh_token,
+        'refresh_token_expiration_time': int(current_app.config['REFRESH_TOKEN_EXPIRATION_TIME']) * 24 * 60 * 60 * 1000
+    }), 201
     
 @auth_bp.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
     db = get_db()
+    
     user = db.users.find_one({'email': data['email']})
+    mfa_enabled = user['mfa_enabled']
     if not user or not check_password_hash(user['password'], data['password']):
         return jsonify({'error': 'Invalid credentials'}), 401
-    mfa_enabled = user['mfa_enabled']
-    return token_response(user['_id'], mfa_enabled)
+    
+    access_token, refresh_token = generate_tokens(user['_id'], mfa_enabled = mfa_enabled)
+    
+    return jsonify({
+        'access_token': access_token,
+        'access_token_expiration_time': int(current_app.config['ACCESS_TOKEN_EXPIRATION_TIME']) * 60 * 1000,
+        'refresh_token': refresh_token,
+        'refresh_token_expiration_time': int(current_app.config['REFRESH_TOKEN_EXPIRATION_TIME']) * 24 * 60 * 60 * 1000
+    }), 200
 
 @auth_bp.route('/refresh', methods=['POST'])
 def refresh():
@@ -202,21 +179,36 @@ def oauth_login():
         db = get_db()
         # check the email is already registered
         if not db.users.find_one({'email': email}):
-            create_user(
-                db,
-                email=email,
-                givenName=givenName,
-                familyName=familyName,
-                providers=[provider],
-                picture=picture
-            )
+            # register the user
+            private_key, public_key = generate_key_pair()
+            private_key_pem = get_private_key_pem(private_key).decode('utf-8')
+            public_key_pem = get_public_key_pem(public_key).decode('utf-8')
+            user = {
+                'email': email,
+                'providers': [provider],
+                'private_key': private_key_pem,
+                'public_key': public_key_pem,
+                'created_at': datetime.utcnow(),
+                'givenName': givenName,
+                'familyName': familyName,
+                'picture': picture,
+                'mfa_secret': None,
+                'mfa_enabled': False
+            }
+            db.users.insert_one(user)
 
         # check if for provider is already registered
         if not db.users.find_one({'email': email, 'providers': {'$in': [provider]}}):
             db.users.update_one({'email': email}, {'$push': {'providers': provider}})
         userId = db.users.find_one({'email': email})['_id']
         print("userId", userId)
-        return token_response(userId, False, provider=provider)
+        access_token, refresh_token = generate_tokens(userId, 'google')
+        return jsonify({
+            'access_token': access_token,
+            'access_token_expiration_time': int(current_app.config['ACCESS_TOKEN_EXPIRATION_TIME']) * 60 * 1000,
+            'refresh_token': refresh_token,
+            'refresh_token_expiration_time': int(current_app.config['REFRESH_TOKEN_EXPIRATION_TIME']) * 24 * 60 * 60 * 1000
+        }), 200
     else:
         return jsonify({'error': 'Invalid provider'}), 400
 
@@ -273,4 +265,25 @@ def verify_mfa(current_user):
         return jsonify({'valid': True}), 200
     else:
         return jsonify({'error': 'Invalid OTP'}), 400
+
+@auth_bp.route('/users', methods=['GET'])
+@token_required
+def get_users(current_user):
+    db = get_db()
+    users = db.users.find({}, {
+        'email': 1, 
+        'givenName': 1, 
+        'familyName': 1, 
+        'created_at': 1
+    })
     
+    users_list = []
+    for user in users:
+        users_list.append({
+            'id': str(user['_id']),
+            'email': user['email'],
+            'name': f"{user['givenName']} {user['familyName']}",
+            'created_at': user.get('created_at', '')
+        })
+    
+    return jsonify(users_list), 200

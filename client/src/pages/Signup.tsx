@@ -22,10 +22,12 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   // Función para manejar el registro
-  const onRegister = (email: string, password: string) => {
+  const onRegister = (email: string, password: string, givenName: string, familyName: string) => {
     handleRegister(
       email, 
       password, 
+      givenName,
+      familyName,
       () => {
         dispatch(setAppState('LOGGED_IN'));
         navigate('/', { replace: true });
@@ -36,10 +38,20 @@ const Signup = () => {
   // Formik para el form
   const formik = useFormik({
     initialValues: {
+      givenName: '',
+      familyName: '',
       email: '',
       password: ''
     },
     validationSchema: Yup.object({
+      givenName: Yup.string()
+        .min(2, 'El nombre debe tener al menos 2 caracteres')
+        .max(50, 'El nombre no puede exceder los 50 caracteres')
+        .required('Campo requerido'),
+      familyName: Yup.string()
+        .min(2, 'El apellido debe tener al menos 2 caracteres')
+        .max(50, 'El apellido no puede exceder los 50 caracteres')
+        .required('Campo requerido'),
       email: Yup.string()
         .email('Correo electrónico inválido')
         .required('Campo requerido'),
@@ -52,7 +64,7 @@ const Signup = () => {
         .matches(/[^A-Za-z0-9]/, 'La contraseña debe contener al menos un carácter especial'),
     }),
     onSubmit: (values) => {
-      onRegister(values.email, values.password);
+      onRegister(values.email, values.password, values.givenName, values.familyName);
     },
   });
 
@@ -98,6 +110,68 @@ const Signup = () => {
           gap: '16px' 
         }}
       >
+        <div>
+          <label htmlFor="givenName" style={{
+            display: 'block',
+            marginBottom: '6px',
+            color: colors.dark,
+            fontWeight: 'bold'
+          }}>Nombre</label>
+          <input 
+            id="givenName"
+            type="text" 
+            name="givenName" 
+            placeholder="Tu nombre"
+            onChange={formik.handleChange} 
+            onBlur={formik.handleBlur}
+            value={formik.values.givenName}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '4px',
+              border: `1px solid ${colors.secondary}`,
+              boxSizing: 'border-box',
+              fontSize: '16px',
+              outline: 'none',
+              transition: 'border-color 0.3s'
+            }}
+          />
+          {formik.touched.givenName && formik.errors.givenName && 
+            <div style={{ color: 'crimson', fontSize: '12px', marginTop: '4px' }}>{formik.errors.givenName}</div>
+          }
+        </div>
+
+        <div>
+          <label htmlFor="familyName" style={{
+            display: 'block',
+            marginBottom: '6px',
+            color: colors.dark,
+            fontWeight: 'bold'
+          }}>Apellido</label>
+          <input 
+            id="familyName"
+            type="text" 
+            name="familyName" 
+            placeholder="Tu apellido"
+            onChange={formik.handleChange} 
+            onBlur={formik.handleBlur}
+            value={formik.values.familyName}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '4px',
+              border: `1px solid ${colors.secondary}`,
+              boxSizing: 'border-box',
+              fontSize: '16px',
+              outline: 'none',
+              transition: 'border-color 0.3s'
+            }}
+          />
+          {formik.touched.familyName && formik.errors.familyName && 
+            <div style={{ color: 'crimson', fontSize: '12px', marginTop: '4px' }}>{formik.errors.familyName}</div>
+          }
+        </div>
+        
         <div>
           <label htmlFor="email" style={{
             display: 'block',

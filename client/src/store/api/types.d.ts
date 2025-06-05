@@ -61,3 +61,60 @@ export interface VerifyMfaRequest {
 export interface VerifyMfaResponse {
   valid: boolean;
 }
+
+// ========== NUEVOS TIPOS PARA CHAT ==========
+
+export interface User {
+	id: string;
+	email: string;
+	name: string;
+	created_at: string;
+}
+
+export interface Message {
+	id: string;
+	sender_id: string;
+	recipient_id: string;
+	content: string;
+	timestamp: string;
+	security_info?: {
+		is_signed: boolean;
+		signature_valid: boolean;
+		encrypted: boolean;
+	};
+	error?: string;
+}
+
+export interface ConversationResponse {
+	conversation_between: {
+		user1: string;
+		user2: string;
+	};
+	message_count: number;
+	messages: Message[];
+}
+
+export interface SendMessageRequest {
+	recipientId: string;
+	message: string;
+}
+
+export interface SendMessageResponse {
+	status: string;
+	message_id: string;
+	security_features: {
+		encrypted: boolean;
+		signed: boolean;
+		algorithm: string;
+	};
+}
+
+export interface CurrentUserResponse {
+	id: string;
+	email: string;
+	name?: string;
+	given_name?: string;
+	family_name?: string;
+	created_at?: string;
+	profile_picture?: string;
+}
