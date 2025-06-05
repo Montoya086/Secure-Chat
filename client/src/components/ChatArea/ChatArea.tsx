@@ -81,6 +81,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({
     }
   };
 
+  // 🔥 MEJORADO: Función para detectar si es un mensaje optimista
+  const isOptimisticMessage = (message: Message | GroupMessage) => {
+    return message.id.startsWith('temp-') || 
+           message.security_info?.system === 'optimistic' ||
+           'isOptimistic' in message;
+  };
+
   const handleSendMessage = async (e?: React.KeyboardEvent) => {
     if (e && e.key !== 'Enter') return;
     if (!newMessage.trim() || (!selectedUser && !selectedGroup)) return;
@@ -239,6 +246,9 @@ const ChatArea: React.FC<ChatAreaProps> = ({
               // Para mensajes de grupo, mostrar el nombre del sender
               const isGroupMessage = 'sender_name' in message;
               const senderName = isGroupMessage ? (message as GroupMessage).sender_name : null;
+              
+              // 🔥 NUEVO: Detectar si es optimista
+              const isOptimistic = isOptimisticMessage(message);
 
               return (
                 <div key={message.id}>
@@ -284,7 +294,10 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                         backgroundColor: isOwn ? colors.accent : colors.white,
                         color: isOwn ? colors.white : colors.dark,
                         boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                        wordWrap: 'break-word'
+                        wordWrap: 'break-word',
+                        // 🔥 NUEVO: Estilo diferente para mensajes optimistas
+                        opacity: isOptimistic ? 0.7 : 1,
+                        border: isOptimistic ? `1px dashed ${isOwn ? colors.white : colors.accent}` : 'none'
                       }}>
                         <p style={{
                           margin: 0,
@@ -297,14 +310,25 @@ const ChatArea: React.FC<ChatAreaProps> = ({
                           fontSize: '11px',
                           marginTop: '4px',
                           opacity: 0.7,
-                          textAlign: 'right'
+                          textAlign: 'right',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                          gap: '4px'
                         }}>
                           {formatTime(message.timestamp)}
-                          {message.security_info?.encrypted && (
-                            <span style={{ marginLeft: '4px' }} title="Mensaje encriptado">🔒</span>
-                          )}
-                          {message.security_info?.is_signed && (
-                            <span style={{ marginLeft: '4px' }} title="Mensaje firmado">✓</span>
+                          {/* 🔥 NUEVO: Indicador de estado del mensaje */}
+                          {isOptimistic ? (
+                            <span title="Enviando...">⏳</span>
+                          ) : (
+                            <>
+                              {message.security_info?.encrypted && (
+                                <span title="Mensaje encriptado">🔒</span>
+                              )}
+                              {message.security_info?.is_signed && (
+                                <span title="Mensaje firmado">✓</span>
+                              )}
+                            </>
                           )}
                         </div>
                         {message.error && (

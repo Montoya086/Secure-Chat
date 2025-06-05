@@ -20,6 +20,19 @@ interface Conversation {
   unreadCount?: number;
 }
 
+// 🔥 NUEVO: Interface para mensajes optimistas con metadata
+interface OptimisticMessage extends Message {
+  isOptimistic: true;
+  optimisticId: string;
+  sentAt: number;
+}
+
+interface OptimisticGroupMessage extends GroupMessage {
+  isOptimistic: true;
+  optimisticId: string;
+  sentAt: number;
+}
+
 const useChat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -28,6 +41,10 @@ const useChat = () => {
   const [currentUserData, setCurrentUserData] = useState<User | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
+
+  // 🔥 MEJORADO: Estados para mensajes optimistas con mejor tracking
+  const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
+  const [optimisticGroupMessages, setOptimisticGroupMessages] = useState<OptimisticGroupMessage[]>([]);
 
   // RTK Query hooks
   const { 
@@ -46,7 +63,6 @@ const useChat = () => {
 
   const groups = groupsResponse?.groups || [];
 
-  // 🔥 CAMBIO PRINCIPAL: Usar queries normales en lugar de lazy queries
   // Para conversaciones directas
   const { 
     data: conversationData,
@@ -55,9 +71,9 @@ const useChat = () => {
   } = useGetConversationQuery(
     selectedUser && currentUserId 
       ? { user1: currentUserId, user2: selectedUser.id }
-      : { user1: '', user2: '' }, // Placeholder cuando no hay selección
+      : { user1: '', user2: '' },
     { 
-      skip: !selectedUser || !currentUserId // Skip la query si no hay usuario seleccionado
+      skip: !selectedUser || !currentUserId
     }
   );
 
@@ -69,7 +85,7 @@ const useChat = () => {
   } = useGetGroupMessagesQuery(
     selectedGroup?.id || '',
     { 
-      skip: !selectedGroup // Skip la query si no hay grupo seleccionado
+      skip: !selectedGroup
     }
   );
 
@@ -86,9 +102,89 @@ const useChat = () => {
     isLoading: isCreatingGroup 
   }] = useCreateGroupMutation();
 
-  // 🔥 NUEVO: Actualizar mensajes automáticamente cuando cambian los datos
-  const messages = conversationData?.messages || [];
-  const groupMessages = groupConversationData?.messages || [];
+  // 🔥 MEJORADO: Combinar mensajes reales con optimistas, filtrando duplicados
+  const messages = [...(conversationData?.messages || []), ...optimisticMessages]
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  const groupMessages = [...(groupConversationData?.messages || []), ...optimisticGroupMessages]
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  // 🔥 MEJORADO: Limpiar mensajes optimistas cuando llegan los reales - con mejor lógica
+  useEffect(() => {
+    if (conversationData?.messages && optimisticMessages.length > 0) {
+      console.log('🔍 Checking optimistic messages for cleanup...');
+      console.log('Real messages count:', conversationData.messages.length);
+      console.log('Optimistic messages count:', optimisticMessages.length);
+      
+      // Buscar mensajes optimistas que ya existen en los datos reales
+      const messagesToKeep: OptimisticMessage[] = [];
+      const now = Date.now();
+      
+      optimisticMessages.forEach(optimistic => {
+        // Buscar si existe un mensaje real con el mismo contenido del mismo sender en los últimos 30 segundos
+        const exists = conversationData.messages.some(real => 
+          real.content.trim() === optimistic.content.trim() &&
+          real.sender_id === optimistic.sender_id &&
+          Math.abs(new Date(real.timestamp).getTime() - optimistic.sentAt) < 30000 // 30 segundos
+        );
+        
+        // También remover mensajes optimistas muy viejos (más de 60 segundos)
+        const tooOld = (now - optimistic.sentAt) > 60000;
+        
+        if (!exists && !tooOld) {
+          messagesToKeep.push(optimistic);
+        } else {
+          console.log('🧹 Removing optimistic message:', optimistic.content.substring(0, 20));
+        }
+      });
+      
+      if (messagesToKeep.length !== optimisticMessages.length) {
+        setOptimisticMessages(messagesToKeep);
+      }
+    }
+  }, [conversationData, optimisticMessages]);
+
+  useEffect(() => {
+    if (groupConversationData?.messages && optimisticGroupMessages.length > 0) {
+      console.log('🔍 Checking optimistic group messages for cleanup...');
+      console.log('Real group messages count:', groupConversationData.messages.length);
+      console.log('Optimistic group messages count:', optimisticGroupMessages.length);
+      
+      const messagesToKeep: OptimisticGroupMessage[] = [];
+      const now = Date.now();
+      
+      optimisticGroupMessages.forEach(optimistic => {
+        // Buscar si existe un mensaje real con el mismo contenido del mismo sender
+        const exists = groupConversationData.messages.some(real => 
+          real.content.trim() === optimistic.content.trim() &&
+          real.sender_id === optimistic.sender_id &&
+          Math.abs(new Date(real.timestamp).getTime() - optimistic.sentAt) < 30000
+        );
+        
+        const tooOld = (now - optimistic.sentAt) > 60000;
+        
+        if (!exists && !tooOld) {
+          messagesToKeep.push(optimistic);
+        } else {
+          console.log('🧹 Removing optimistic group message:', optimistic.content.substring(0, 20));
+        }
+      });
+      
+      if (messagesToKeep.length !== optimisticGroupMessages.length) {
+        setOptimisticGroupMessages(messagesToKeep);
+      }
+    }
+  }, [groupConversationData, optimisticGroupMessages]);
+
+  // 🔥 MEJORADO: Limpiar mensajes optimistas al cambiar de conversación
+  useEffect(() => {
+    console.log('🔄 Conversation changed - clearing optimistic messages');
+    setOptimisticMessages([]);
+    setOptimisticGroupMessages([]);
+  }, [selectedUser, selectedGroup]);
+
+  // Función para generar ID temporal único
+  const generateTempId = () => `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   // Inicializar usuario actual desde el token y hacer match con la lista de usuarios
   const initializeCurrentUser = useCallback(() => {
@@ -148,21 +244,21 @@ const useChat = () => {
     console.log('💬 Conversations initialized:', convs.length);
   }, [currentUserId]);
 
-  // 🔥 SIMPLIFICADO: Seleccionar usuario (no necesita cargar mensajes manualmente)
+  // Seleccionar usuario
   const selectUser = useCallback((user: User) => {
     console.log('📨 Selecting user:', user.name || user.email);
     setSelectedUser(user);
-    setSelectedGroup(null); // Deseleccionar grupo
+    setSelectedGroup(null);
   }, []);
 
-  // 🔥 SIMPLIFICADO: Seleccionar grupo (no necesita cargar mensajes manualmente)
+  // Seleccionar grupo
   const selectGroup = useCallback((group: Group) => {
     console.log('👥 Selecting group:', group.name);
     setSelectedGroup(group);
-    setSelectedUser(null); // Deseleccionar usuario
+    setSelectedUser(null);
   }, []);
 
-  // 🔥 SIMPLIFICADO: Enviar mensaje directo
+  // 🔥 MEJORADO: Enviar mensaje directo con mejor tracking optimista
   const sendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedUser || !currentUserId) {
       return false;
@@ -170,34 +266,74 @@ const useChat = () => {
 
     setSendSuccess(false);
     
+    const optimisticId = generateTempId();
+    const sentAt = Date.now();
+    
+    // 🔥 ACTUALIZACIÓN OPTIMISTA mejorada
+    const optimisticMessage: OptimisticMessage = {
+      id: optimisticId,
+      sender_id: currentUserId,
+      recipient_id: selectedUser.id,
+      content: newMessage.trim(),
+      timestamp: new Date().toISOString(),
+      security_info: {
+        is_signed: true,
+        signature_valid: true,
+        encrypted: true,
+        system: 'optimistic'
+      },
+      isOptimistic: true,
+      optimisticId,
+      sentAt
+    };
+
+    console.log('🚀 Adding optimistic message:', optimisticMessage.content);
+    setOptimisticMessages(prev => [...prev, optimisticMessage]);
+    
+    // Limpiar input inmediatamente para mejor UX
+    const messageToSend = newMessage.trim();
+    setNewMessage('');
+    
     try {
       console.log('📤 Sending message to:', selectedUser.id);
       const result = await sendMessageMutation({
         recipientId: selectedUser.id,
-        message: newMessage
+        message: messageToSend
       }).unwrap();
 
       console.log('✅ Message sent:', result.status);
       
-      // Limpiar input
-      setNewMessage('');
-      
-      // 🔥 ELIMINADO: No necesitamos recargar manualmente, RTK Query lo hace automáticamente
-      // await loadConversation(selectedUser.id);
-      
       // Actualizar última conversación
-      updateConversationLastMessage(selectedUser.id, newMessage);
+      updateConversationLastMessage(selectedUser.id, messageToSend);
       
       setSendSuccess(true);
+      
+      // 🔥 NUEVO: Forzar limpieza del mensaje optimista después de éxito
+      setTimeout(() => {
+        setOptimisticMessages(prev => 
+          prev.filter(msg => msg.optimisticId !== optimisticId)
+        );
+        console.log('🧹 Force-removed optimistic message after success');
+      }, 2000);
+      
       return true;
     } catch (error) {
       console.error('❌ Error sending message:', error);
+      
+      // 🔥 REVERTIR: Quitar mensaje optimista si falla
+      setOptimisticMessages(prev => 
+        prev.filter(msg => msg.optimisticId !== optimisticId)
+      );
+      
+      // Restaurar el mensaje en el input si falla
+      setNewMessage(messageToSend);
+      
       setSendSuccess(false);
       return false;
     }
   }, [newMessage, selectedUser, currentUserId, sendMessageMutation]);
 
-  // 🔥 SIMPLIFICADO: Enviar mensaje a grupo
+  // 🔥 MEJORADO: Enviar mensaje a grupo con mejor tracking optimista
   const sendGroupMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedGroup) {
       return false;
@@ -205,32 +341,77 @@ const useChat = () => {
 
     setSendSuccess(false);
     
+    const optimisticId = generateTempId();
+    const sentAt = Date.now();
+    
+    // 🔥 ACTUALIZACIÓN OPTIMISTA mejorada
+    const senderName = currentUserData ? 
+      `${currentUserData.name}` || currentUserData.email : 
+      'Usuario';
+
+    const optimisticMessage: OptimisticGroupMessage = {
+      id: optimisticId,
+      sender_id: currentUserId,
+      sender_name: senderName,
+      group_id: selectedGroup.id,
+      content: newMessage.trim(),
+      timestamp: new Date().toISOString(),
+      security_info: {
+        is_signed: true,
+        signature_valid: true,
+        encrypted: true,
+        system: 'optimistic'
+      },
+      isOptimistic: true,
+      optimisticId,
+      sentAt
+    };
+
+    console.log('🚀 Adding optimistic group message:', optimisticMessage.content);
+    setOptimisticGroupMessages(prev => [...prev, optimisticMessage]);
+    
+    // Limpiar input inmediatamente
+    const messageToSend = newMessage.trim();
+    setNewMessage('');
+    
     try {
       console.log('👥 Sending group message to:', selectedGroup.id);
       const result = await sendGroupMessageMutation({
         groupId: selectedGroup.id,
-        data: { message: newMessage }
+        data: { message: messageToSend }
       }).unwrap();
 
       console.log('✅ Group message sent:', result.status);
-      
-      // Limpiar input
-      setNewMessage('');
-      
-      // 🔥 ELIMINADO: No necesitamos recargar manualmente, RTK Query lo hace automáticamente
-      // await loadGroupConversation(selectedGroup.id);
       
       // Refrescar la lista de grupos para actualizar el último mensaje
       refetchGroups();
       
       setSendSuccess(true);
+      
+      // 🔥 NUEVO: Forzar limpieza del mensaje optimista después de éxito
+      setTimeout(() => {
+        setOptimisticGroupMessages(prev => 
+          prev.filter(msg => msg.optimisticId !== optimisticId)
+        );
+        console.log('🧹 Force-removed optimistic group message after success');
+      }, 2000);
+      
       return true;
     } catch (error) {
       console.error('❌ Error sending group message:', error);
+      
+      // 🔥 REVERTIR: Quitar mensaje optimista si falla
+      setOptimisticGroupMessages(prev => 
+        prev.filter(msg => msg.optimisticId !== optimisticId)
+      );
+      
+      // Restaurar el mensaje en el input si falla
+      setNewMessage(messageToSend);
+      
       setSendSuccess(false);
       return false;
     }
-  }, [newMessage, selectedGroup, sendGroupMessageMutation, refetchGroups]);
+  }, [newMessage, selectedGroup, currentUserId, currentUserData, sendGroupMessageMutation, refetchGroups]);
 
   // Crear grupo
   const createGroup = useCallback(async (groupName: string, memberIds: string[]) => {
@@ -267,7 +448,6 @@ const useChat = () => {
   // Refrescar datos
   const refreshData = useCallback(async () => {
     await Promise.all([refetchUsers(), refetchGroups()]);
-    // También refrescar la conversación actual si hay una seleccionada
     if (selectedUser) {
       refetchConversation();
     }
@@ -280,11 +460,13 @@ const useChat = () => {
   const resetChatState = useCallback(() => {
     setSelectedUser(null);
     setSelectedGroup(null);
+    setOptimisticMessages([]);
+    setOptimisticGroupMessages([]);
     setNewMessage('');
     setSendSuccess(false);
   }, []);
 
-  // 🔥 NUEVO: Debug para ver cuándo se actualizan los mensajes
+  // Debug para ver cuándo se actualizan los mensajes
   useEffect(() => {
     if (conversationData) {
       console.log('🔄 Conversation data updated:', conversationData.message_count, 'messages');
