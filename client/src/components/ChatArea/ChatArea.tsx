@@ -96,7 +96,8 @@ const ChatArea: React.FC<ChatAreaProps> = ({
         justifyContent: 'center',
         backgroundColor: colors.white,
         color: '#666',
-        fontSize: '18px'
+        fontSize: '18px',
+        paddingLeft: '60px' // Agregamos margen izquierdo
       }}>
         <div style={{
           fontSize: '64px',

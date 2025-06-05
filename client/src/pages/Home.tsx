@@ -32,6 +32,7 @@ const Home = () => {
     conversations,
     selectedUser,
     currentUserId,
+    currentUserData,
     messages,
     newMessage,
     sendSuccess,
@@ -40,6 +41,7 @@ const Home = () => {
     isSendingMessage,
     usersError,
     initializeCurrentUser,
+    getCurrentUserInfo,
     initializeConversations,
     selectUser,
     sendMessage,
@@ -47,7 +49,7 @@ const Home = () => {
     refreshData
   } = useChat();
 
-  // Inicializar usuario actual y datos
+  // Inicializar usuario actual cuando se carga el componente
   useEffect(() => {
     const userId = initializeCurrentUser();
     if (!userId) {
@@ -55,36 +57,21 @@ const Home = () => {
     }
   }, [initializeCurrentUser, dispatch]);
 
-  // Inicializar conversaciones cuando se cargan los usuarios
+  // Actualizar usuario actual cuando cambia la lista de usuarios
+  useEffect(() => {
+    if (users.length > 0) {
+      initializeCurrentUser(); // Esto buscará el usuario en la nueva lista
+    }
+  }, [users, initializeCurrentUser]);
+
+  // Inicializar conversaciones cuando se cargan los usuarios y se tiene el usuario actual
   useEffect(() => {
     if (users.length > 0 && currentUserId) {
-      // Filtrar usuarios para no incluir al usuario actual
-      const otherUsers = users.filter(user => user.id !== currentUserId);
-      initializeConversations(otherUsers);
+      initializeConversations(users);
     }
   }, [users, currentUserId, initializeConversations]);
 
-  // Obtener información del usuario actual
-  const getCurrentUserInfo = () => {
-    const token = Cookies.get(TOKEN_COOKIE_NAME);
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const firstName = payload.given_name || '';
-        const lastName = payload.family_name || '';
-        const fullName = `${firstName} ${lastName}`.trim();
-        
-        return {
-          id: payload.sub || payload.user_id || payload.id,
-          email: payload.email || 'usuario@email.com',
-          name: fullName || payload.name || ''
-        };
-      } catch (error) {
-        console.error('Error decoding token:', error);
-      }
-    }
-    return null;
-  };
+
 
   const handleLogout = () => {
     dispatch(setAppState('NOT_LOGGED_IN'));

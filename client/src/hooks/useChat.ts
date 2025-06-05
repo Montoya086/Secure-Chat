@@ -20,6 +20,7 @@ const useChat = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserData, setCurrentUserData] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
@@ -40,7 +41,7 @@ const useChat = () => {
     isLoading: isSendingMessage 
   }] = useSendMessageMutation();
 
-  // Inicializar usuario actual desde el token
+  // Inicializar usuario actual desde el token y hacer match con la lista de usuarios
   const initializeCurrentUser = useCallback(() => {
     const token = Cookies.get(TOKEN_COOKIE_NAME);
     if (token) {
@@ -48,18 +49,47 @@ const useChat = () => {
         const payload = JSON.parse(atob(token.split('.')[1]));
         const userId = payload.sub || payload.user_id || payload.id;
         setCurrentUserId(userId);
-        console.log('👤 Current user ID:', userId);
+        
+        // Buscar el usuario actual en la lista de usuarios
+        if (users.length > 0) {
+          const currentUser = users.find(user => user.id === userId);
+          if (currentUser) {
+            setCurrentUserData(currentUser);
+            console.log('👤 Current user found:', currentUser);
+          } else {
+            console.warn('⚠️ Current user not found in users list');
+          }
+        }
+        
+        console.log('👤 Current user ID from token:', userId);
         return userId;
       } catch (error) {
         console.error('❌ Error decoding token:', error);
       }
     }
     return null;
-  }, []);
+  }, [users]);
 
-  // Inicializar conversaciones a partir de usuarios
+  // Obtener información del usuario actual formateada
+  const getCurrentUserInfo = useCallback(() => {
+    if (currentUserData) {
+      return {
+        id: currentUserData.id,
+        email: currentUserData.email,
+        name: currentUserData.name || ''
+      };
+    }
+    return null;
+  }, [currentUserData]);
+
+  // Inicializar conversaciones a partir de usuarios (excluyendo al usuario actual)
   const initializeConversations = useCallback((usersList: User[]) => {
-    const convs = usersList.map((user: User) => ({
+    if (!currentUserId) return;
+    
+    // Filtrar usuarios para no incluir al usuario actual
+    const otherUsers = usersList.filter(user => user.id !== currentUserId);
+    
+    const convs = otherUsers.map((user: User) => ({
       user,
       lastMessage: 'Inicia una conversación...',
       timestamp: new Date().toISOString(),
@@ -67,7 +97,7 @@ const useChat = () => {
     }));
     setConversations(convs);
     console.log('💬 Conversations initialized:', convs.length);
-  }, []);
+  }, [currentUserId]);
 
   // Cargar mensajes de una conversación
   const loadConversation = useCallback(async (userId: string) => {
@@ -162,6 +192,7 @@ const useChat = () => {
     conversations,
     selectedUser,
     currentUserId,
+    currentUserData,
     messages,
     newMessage,
     sendSuccess,
@@ -176,6 +207,7 @@ const useChat = () => {
 
     // Métodos
     initializeCurrentUser,
+    getCurrentUserInfo,
     initializeConversations,
     selectUser,
     sendMessage,
