@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { 
   useGetUsersQuery,
-  useLazyGetConversationQuery,
+  useGetConversationQuery,
   useSendMessageMutation,
   useGetUserPublicKeyQuery,
   useGetGroupsQuery,
-  useLazyGetGroupMessagesQuery,
+  useGetGroupMessagesQuery,
   useSendGroupMessageMutation,
   useCreateGroupMutation,
 } from "../store/api/baseApi-slice";
@@ -26,8 +26,6 @@ const useChat = () => {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserData, setCurrentUserData] = useState<User | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [groupMessages, setGroupMessages] = useState<GroupMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sendSuccess, setSendSuccess] = useState(false);
 
@@ -48,14 +46,34 @@ const useChat = () => {
 
   const groups = groupsResponse?.groups || [];
 
-  const [getConversation, { 
-    isLoading: isMessagesLoading 
-  }] = useLazyGetConversationQuery();
+  // 🔥 CAMBIO PRINCIPAL: Usar queries normales en lugar de lazy queries
+  // Para conversaciones directas
+  const { 
+    data: conversationData,
+    isLoading: isMessagesLoading,
+    refetch: refetchConversation
+  } = useGetConversationQuery(
+    selectedUser && currentUserId 
+      ? { user1: currentUserId, user2: selectedUser.id }
+      : { user1: '', user2: '' }, // Placeholder cuando no hay selección
+    { 
+      skip: !selectedUser || !currentUserId // Skip la query si no hay usuario seleccionado
+    }
+  );
 
-  const [getGroupMessages, { 
-    isLoading: isGroupMessagesLoading 
-  }] = useLazyGetGroupMessagesQuery();
+  // Para grupos
+  const { 
+    data: groupConversationData,
+    isLoading: isGroupMessagesLoading,
+    refetch: refetchGroupConversation
+  } = useGetGroupMessagesQuery(
+    selectedGroup?.id || '',
+    { 
+      skip: !selectedGroup // Skip la query si no hay grupo seleccionado
+    }
+  );
 
+  // Mutations
   const [sendMessageMutation, { 
     isLoading: isSendingMessage 
   }] = useSendMessageMutation();
@@ -67,6 +85,10 @@ const useChat = () => {
   const [createGroupMutation, { 
     isLoading: isCreatingGroup 
   }] = useCreateGroupMutation();
+
+  // 🔥 NUEVO: Actualizar mensajes automáticamente cuando cambian los datos
+  const messages = conversationData?.messages || [];
+  const groupMessages = groupConversationData?.messages || [];
 
   // Inicializar usuario actual desde el token y hacer match con la lista de usuarios
   const initializeCurrentUser = useCallback(() => {
@@ -126,59 +148,21 @@ const useChat = () => {
     console.log('💬 Conversations initialized:', convs.length);
   }, [currentUserId]);
 
-  // Cargar mensajes de una conversación directa
-  const loadConversation = useCallback(async (userId: string) => {
-    if (!currentUserId) {
-      console.error('❌ No current user ID available');
-      return;
-    }
-
-    try {
-      console.log('📨 Loading conversation between:', currentUserId, 'and', userId);
-      const result = await getConversation({
-        user1: currentUserId,
-        user2: userId
-      }).unwrap();
-
-      setMessages(result.messages || []);
-      console.log('📨 Messages loaded:', result.message_count);
-    } catch (error) {
-      console.error('❌ Error loading conversation:', error);
-      setMessages([]);
-    }
-  }, [currentUserId, getConversation]);
-
-  // Cargar mensajes de un grupo
-  const loadGroupConversation = useCallback(async (groupId: string) => {
-    try {
-      console.log('👥 Loading group messages for:', groupId);
-      const result = await getGroupMessages(groupId).unwrap();
-
-      setGroupMessages(result.messages || []);
-      console.log('👥 Group messages loaded:', result.message_count);
-    } catch (error) {
-      console.error('❌ Error loading group messages:', error);
-      setGroupMessages([]);
-    }
-  }, [getGroupMessages]);
-
-  // Seleccionar usuario y cargar conversación
-  const selectUser = useCallback(async (user: User) => {
+  // 🔥 SIMPLIFICADO: Seleccionar usuario (no necesita cargar mensajes manualmente)
+  const selectUser = useCallback((user: User) => {
+    console.log('📨 Selecting user:', user.name || user.email);
     setSelectedUser(user);
     setSelectedGroup(null); // Deseleccionar grupo
-    setGroupMessages([]); // Limpiar mensajes de grupo
-    await loadConversation(user.id);
-  }, [loadConversation]);
+  }, []);
 
-  // Seleccionar grupo y cargar conversación
-  const selectGroup = useCallback(async (group: Group) => {
+  // 🔥 SIMPLIFICADO: Seleccionar grupo (no necesita cargar mensajes manualmente)
+  const selectGroup = useCallback((group: Group) => {
+    console.log('👥 Selecting group:', group.name);
     setSelectedGroup(group);
     setSelectedUser(null); // Deseleccionar usuario
-    setMessages([]); // Limpiar mensajes directos
-    await loadGroupConversation(group.id);
-  }, [loadGroupConversation]);
+  }, []);
 
-  // Enviar mensaje directo
+  // 🔥 SIMPLIFICADO: Enviar mensaje directo
   const sendMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedUser || !currentUserId) {
       return false;
@@ -198,8 +182,8 @@ const useChat = () => {
       // Limpiar input
       setNewMessage('');
       
-      // Recargar mensajes de la conversación
-      await loadConversation(selectedUser.id);
+      // 🔥 ELIMINADO: No necesitamos recargar manualmente, RTK Query lo hace automáticamente
+      // await loadConversation(selectedUser.id);
       
       // Actualizar última conversación
       updateConversationLastMessage(selectedUser.id, newMessage);
@@ -211,9 +195,9 @@ const useChat = () => {
       setSendSuccess(false);
       return false;
     }
-  }, [newMessage, selectedUser, currentUserId, sendMessageMutation, loadConversation]);
+  }, [newMessage, selectedUser, currentUserId, sendMessageMutation]);
 
-  // Enviar mensaje a grupo
+  // 🔥 SIMPLIFICADO: Enviar mensaje a grupo
   const sendGroupMessage = useCallback(async () => {
     if (!newMessage.trim() || !selectedGroup) {
       return false;
@@ -233,8 +217,8 @@ const useChat = () => {
       // Limpiar input
       setNewMessage('');
       
-      // Recargar mensajes del grupo
-      await loadGroupConversation(selectedGroup.id);
+      // 🔥 ELIMINADO: No necesitamos recargar manualmente, RTK Query lo hace automáticamente
+      // await loadGroupConversation(selectedGroup.id);
       
       // Refrescar la lista de grupos para actualizar el último mensaje
       refetchGroups();
@@ -246,7 +230,7 @@ const useChat = () => {
       setSendSuccess(false);
       return false;
     }
-  }, [newMessage, selectedGroup, sendGroupMessageMutation, loadGroupConversation, refetchGroups]);
+  }, [newMessage, selectedGroup, sendGroupMessageMutation, refetchGroups]);
 
   // Crear grupo
   const createGroup = useCallback(async (groupName: string, memberIds: string[]) => {
@@ -283,17 +267,35 @@ const useChat = () => {
   // Refrescar datos
   const refreshData = useCallback(async () => {
     await Promise.all([refetchUsers(), refetchGroups()]);
-  }, [refetchUsers, refetchGroups]);
+    // También refrescar la conversación actual si hay una seleccionada
+    if (selectedUser) {
+      refetchConversation();
+    }
+    if (selectedGroup) {
+      refetchGroupConversation();
+    }
+  }, [refetchUsers, refetchGroups, refetchConversation, refetchGroupConversation, selectedUser, selectedGroup]);
 
   // Reset estados
   const resetChatState = useCallback(() => {
     setSelectedUser(null);
     setSelectedGroup(null);
-    setMessages([]);
-    setGroupMessages([]);
     setNewMessage('');
     setSendSuccess(false);
   }, []);
+
+  // 🔥 NUEVO: Debug para ver cuándo se actualizan los mensajes
+  useEffect(() => {
+    if (conversationData) {
+      console.log('🔄 Conversation data updated:', conversationData.message_count, 'messages');
+    }
+  }, [conversationData]);
+
+  useEffect(() => {
+    if (groupConversationData) {
+      console.log('🔄 Group conversation data updated:', groupConversationData.message_count, 'messages');
+    }
+  }, [groupConversationData]);
 
   return {
     // Estados
@@ -334,8 +336,6 @@ const useChat = () => {
     setNewMessage,
     refreshData,
     resetChatState,
-    loadConversation,
-    loadGroupConversation,
     updateConversationLastMessage,
   };
 };

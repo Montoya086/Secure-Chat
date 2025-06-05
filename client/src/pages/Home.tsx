@@ -18,13 +18,6 @@ const colors = {
   purple: '#67597A'
 };
 
-interface Conversation {
-  user: any;
-  lastMessage?: string;
-  timestamp?: string;
-  unreadCount?: number;
-}
-
 const Home = () => {
   const dispatch = useDispatch();
   const [isCreateGroupModalOpen, setIsCreateGroupModalOpen] = useState(false);
@@ -108,6 +101,7 @@ const Home = () => {
     }
   };
 
+  // 🔥 SIMPLIFICADO: Una sola función para enviar mensajes
   const handleSendMessage = async (): Promise<boolean> => {
     if (!newMessage.trim() || (!selectedUser && !selectedGroup)) {
       return false;
@@ -122,14 +116,7 @@ const Home = () => {
     return false;
   };
 
-  const handleSendGroupMessage = async (): Promise<boolean> => {
-    if (!newMessage.trim() || !selectedGroup || isSendingGroupMessage) {
-      return false;
-    }
-    
-    const success = await sendGroupMessage();
-    return success;
-  };
+  // 🔥 ELIMINADO: handleSendGroupMessage duplicado - ya no es necesario
 
   // Mostrar error si hay problemas cargando usuarios
   if (usersError) {
@@ -233,7 +220,7 @@ const Home = () => {
           isSendingGroupMessage={isSendingGroupMessage}
           onMessageChange={setNewMessage}
           onSendMessage={handleSendMessage}
-          onSendGroupMessage={handleSendGroupMessage}
+          onSendGroupMessage={handleSendMessage} // 🔥 Misma función para ambos
         />
       </div>
 
