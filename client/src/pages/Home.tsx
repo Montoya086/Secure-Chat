@@ -1,79 +1,194 @@
-import React, { useState } from 'react';
-import useAuth from '../hooks/useAuth';
+import React, { useEffect } from 'react';
+import { useDispatch } from 'react-redux';
+import { setAppState } from '../store/slices/appState-slice';
+import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../utils/constants';
+import Cookies from 'js-cookie';
+import useChat from '../hooks/useChat';
 import ChatSidebar from '../components/ChatSidebar/ChatSidebar';
-import ChatPanel from '../components/ChatPanel/ChatPanel';
-import '../components/Home/Home.css';
+import ChatArea from '../components/ChatArea/ChatArea';
 
-interface Message {
-  id: number;
-  sender: string;
-  content: string;
-  timestamp: string;
+// Paleta de colores
+const colors = {
+  primary: '#226946',
+  secondary: '#91B4A3',
+  white: '#FFFFFF',
+  dark: '#0D0B0C',
+  accent: '#007EA7',
+  purple: '#67597A'
+};
+
+interface Conversation {
+  user: any;
+  lastMessage?: string;
+  timestamp?: string;
+  unreadCount?: number;
 }
 
-interface Chat {
-  id: number;
-  name: string;
-  isGroup: boolean;
-  messages: Message[];
-}
+const Home = () => {
+  const dispatch = useDispatch();
+  
+  const {
+    users,
+    conversations,
+    selectedUser,
+    currentUserId,
+    currentUserData,
+    messages,
+    newMessage,
+    sendSuccess,
+    isUsersLoading,
+    isMessagesLoading,
+    isSendingMessage,
+    usersError,
+    initializeCurrentUser,
+    getCurrentUserInfo,
+    initializeConversations,
+    selectUser,
+    sendMessage,
+    setNewMessage,
+    refreshData
+  } = useChat();
 
-const mockChats: Chat[] = [
-  {
-    id: 1,
-    name: 'Juan Pérez',
-    isGroup: false,
-    messages: [
-      { id: 1, sender: 'Juan Pérez', content: 'Hola, ¿cómo estás?', timestamp: '10:00 AM' },
-      { id: 2, sender: 'Tú', content: 'Todo bien, ¿y tú?', timestamp: '10:01 AM' },
-    ],
-  },
-  {
-    id: 2,
-    name: 'Grupo de Proyecto',
-    isGroup: true,
-    messages: [
-      { id: 1, sender: 'Ana', content: '¿Ya subieron el avance?', timestamp: '09:00 AM' },
-      { id: 2, sender: 'Carlos', content: 'Yo ya lo subí al drive.', timestamp: '09:05 AM' },
-    ],
-  },
-];
+  // Inicializar usuario actual cuando se carga el componente
+  useEffect(() => {
+    const userId = initializeCurrentUser();
+    if (!userId) {
+      dispatch(setAppState('NOT_LOGGED_IN'));
+    }
+  }, [initializeCurrentUser, dispatch]);
 
-const Home: React.FC = () => {
-  const { handleLogout } = useAuth();
-  const [chats, setChats] = useState<Chat[]>(mockChats);
-  const [selectedChatId, setSelectedChatId] = useState<number>(chats[0].id);
+  // Actualizar usuario actual cuando cambia la lista de usuarios
+  useEffect(() => {
+    if (users.length > 0) {
+      initializeCurrentUser(); // Esto buscará el usuario en la nueva lista
+    }
+  }, [users, initializeCurrentUser]);
 
-  const selectedChat = chats.find(c => c.id === selectedChatId)!;
+  // Inicializar conversaciones cuando se cargan los usuarios y se tiene el usuario actual
+  useEffect(() => {
+    if (users.length > 0 && currentUserId) {
+      initializeConversations(users);
+    }
+  }, [users, currentUserId, initializeConversations]);
 
-  const handleSendMessage = (messageText: string) => {
-    const newMessage = {
-      id: selectedChat.messages.length + 1,
-      sender: 'Tú',
-      content: messageText,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
 
-    const updatedChat = {
-      ...selectedChat,
-      messages: [...selectedChat.messages, newMessage],
-    };
 
-    setChats(prev => prev.map(chat => chat.id === updatedChat.id ? updatedChat : chat));
+  const handleLogout = () => {
+    dispatch(setAppState('NOT_LOGGED_IN'));
+    Cookies.remove(TOKEN_COOKIE_NAME);
+    Cookies.remove(REFRESH_TOKEN_COOKIE_NAME);
   };
 
+  const handleCreateGroup = () => {
+    alert('Función de crear grupo próximamente');
+    // Aquí puedes implementar la lógica para crear grupos
+    // O navegar a una página específica para crear grupos
+  };
+
+  const handleSendMessage = async (): Promise<boolean> => {
+    if (!newMessage.trim() || !selectedUser || isSendingMessage) {
+      return false;
+    }
+    
+    const success = await sendMessage();
+    return success;
+  };
+
+  // Mostrar error si hay problemas cargando usuarios
+  if (usersError) {
+    return (
+      <div style={{ 
+        backgroundColor: colors.white,
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: '20px'
+      }}>
+        <div style={{ 
+          color: '#ff4444', 
+          fontSize: '18px',
+          textAlign: 'center'
+        }}>
+          <h3>Error al cargar los usuarios</h3>
+          <p>No se pudieron cargar las conversaciones.</p>
+        </div>
+        <button
+          onClick={refreshData}
+          style={{
+            backgroundColor: colors.primary,
+            color: colors.white,
+            padding: '12px 24px',
+            border: 'none',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '16px'
+          }}
+        >
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="container">
-      <ChatSidebar
-        chats={chats}
-        selectedChatId={selectedChatId}
-        onSelectChat={setSelectedChatId}
-        onLogout={handleLogout}
-      />
-      <ChatPanel
-        chat={selectedChat}
-        onSendMessage={handleSendMessage}
-      />
+    <div style={{ 
+      backgroundColor: colors.white,
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Header fijo (opcional) */}
+      <div style={{
+        height: '60px',
+        backgroundColor: colors.primary,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: colors.white,
+        fontSize: '20px',
+        fontWeight: 'bold',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 1000,
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        Secure Chat
+      </div>
+      
+      {/* Contenedor principal del chat */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        marginTop: '60px', // Espacio para el header fijo
+        height: 'calc(100vh - 60px)'
+      }}>
+        {/* Sidebar izquierdo */}
+        <ChatSidebar
+          conversations={conversations}
+          selectedUser={selectedUser}
+          currentUserInfo={getCurrentUserInfo()}
+          isLoading={isUsersLoading}
+          onSelectUser={selectUser}
+          onCreateGroup={handleCreateGroup}
+          onLogout={handleLogout}
+        />
+
+        {/* Área principal del chat */}
+        <ChatArea
+          selectedUser={selectedUser}
+          currentUserId={currentUserId}
+          messages={messages}
+          newMessage={newMessage}
+          isMessagesLoading={isMessagesLoading}
+          isSendingMessage={isSendingMessage}
+          onMessageChange={setNewMessage}
+          onSendMessage={handleSendMessage}
+        />
+      </div>
     </div>
   );
 };

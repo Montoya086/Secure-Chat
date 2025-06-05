@@ -14,6 +14,7 @@ const useAuth = () => {
     const [handleVerifyMfaMutation, { isLoading: isVerifyMfaLoading }] = useVerifyMfaMutation();
     const [error, setError] = useState<string | null>(null);
     const dispatch = useDispatch();
+    
     const handleLogin = async (email: string, password: string, callback: () => void) => {
         setError(null);
         try {
@@ -62,10 +63,15 @@ const useAuth = () => {
         }
     }
 
-    const handleRegister = async (email: string, password: string, callback: () => void) => {
+    const handleRegister = async (email: string, password: string, givenName: string, familyName: string, callback: () => void) => {
         setError(null);
         try {
-            const response = await handleRegisterMutation({ email, password }).unwrap();
+            const response = await handleRegisterMutation({ 
+                email, 
+                password, 
+                givenName, 
+                familyName 
+            }).unwrap();
             if (response.access_token && response.refresh_token) {
                 callback();
             }

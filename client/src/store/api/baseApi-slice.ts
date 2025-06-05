@@ -3,6 +3,7 @@ import Cookies from 'js-cookie';
 import { TOKEN_COOKIE_NAME, REFRESH_TOKEN_COOKIE_NAME } from '../../utils/constants';
 import { setAppState, setMfaEnabled } from '../slices/appState-slice';
 import { authEndpoints } from './ums';
+import { chatEndpoints } from './chat';
 import { validateMfaStatus } from '../../utils/validateMfaStatus';
 
 // Define a service using a base URL and expected endpoints
@@ -78,8 +79,10 @@ export const baseQueryWithReauth = async (
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithReauth,
+  tagTypes: ['User', 'Message', 'Conversation'],
   endpoints: (builder) => ({
     ...authEndpoints(builder),
+    ...chatEndpoints(builder),
   }),
 });
 
@@ -90,4 +93,11 @@ export const {
   useOauthLoginMutation,
   useConfigureMfaMutation,
   useVerifyMfaMutation,
+  
+  // Nuevos hooks para chat
+  useGetUsersQuery,
+  useGetConversationQuery,
+  useLazyGetConversationQuery,
+  useSendMessageMutation,
+  useGetUserPublicKeyQuery,
 } = apiSlice;
